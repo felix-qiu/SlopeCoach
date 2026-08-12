@@ -1,0 +1,40 @@
+{
+  "reference_version": "golden-pose-v1",
+  "pose_frame": {
+    "contract_version": "python-reference-pose-v1",
+    "timestamp_us": 1000000,
+    "frame_index": 30,
+    "frame_geometry": {
+      "width_px": 640,
+      "height_px": 480,
+      "pixel_aspect_ratio": 1.0,
+      "coordinate_space": "SourcePixel2D",
+      "orientation": "CanonicalUpright",
+      "mirrored": false
+    },
+    "joint_schema": "COCO17_V1",
+    "persons": [
+      {
+        "detection_id": 1,
+        "bbox": {
+          "x_px": 80.0,
+          "y_px": 40.0,
+          "width_px": 300.0,
+          "height_px": 400.0,
+          "coordinate_space": "SourcePixel2D"
+        },
+        "person_confidence": 0.99,
+        "keypoints": {
+          "left_hip": {"x_px": 200.0, "y_px": 150.0, "confidence": 0.98, "coordinate_space": "SourcePixel2D"},
+          "left_knee": {"x_px": 200.0, "y_px": 250.0, "confidence": 0.97, "coordinate_space": "SourcePixel2D"},
+          "left_ankle": {"x_px": 300.0, "y_px": 250.0, "confidence": 0.96, "coordinate_space": "SourcePixel2D"}
+        }
+      }
+    ]
+  },
+  "expected": {
+    "left_knee_angle_2d_degrees": 90.0,
+    "absolute_tolerance": 1e-09
+  }
+}
+
