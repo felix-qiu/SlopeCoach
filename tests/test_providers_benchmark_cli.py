@@ -27,9 +27,47 @@ def test_golden_benchmark_runs_without_fake_ground_truth() -> None:
 
 def test_real_video_benchmark_reports_provider_not_configured(tmp_path) -> None:
     report = benchmark_video(tmp_path / "missing.mp4")
+    assert report["input_kind"] == "REAL_VIDEO"
     assert report["pose_provider"] == "NOT_CONFIGURED"
     assert report["pose"]["coverage"] is None
     assert report["biomechanics"]["knee_angle_2d_coverage"] is None
+
+
+def test_synthetic_metadata_smoke_is_not_real_video(tmp_path) -> None:
+    report = benchmark_video(
+        tmp_path / "missing.mp4", input_kind="SYNTHETIC_METADATA_SMOKE"
+    )
+    assert report["input_kind"] == "SYNTHETIC_METADATA_SMOKE"
+
+
+class FakeClock:
+    def __init__(self, values: list[float]) -> None:
+        self.values = iter(values)
+
+    def __call__(self) -> float:
+        return next(self.values)
+
+
+def test_golden_benchmark_uses_one_deterministic_clock_domain() -> None:
+    report, _ = benchmark_golden(
+        FIXTURE, clock=FakeClock([10.0, 10.0, 11.0, 11.0, 13.5, 14.0])
+    )
+    performance = report["performance"]
+    assert performance["total_processing_seconds"] == 4.0
+    assert performance["per_stage_seconds"] == {"parse": 1.0, "analysis": 2.5}
+    assert performance["mean_latency_seconds"] == 2.5
+
+
+def test_video_benchmark_uses_one_deterministic_clock_domain(tmp_path) -> None:
+    clock = FakeClock([20.0, 20.0, 21.5, 21.5, 22.0, 23.0])
+    report = benchmark_video(tmp_path / "missing.mp4", clock=clock)
+    performance = report["performance"]
+    assert performance["total_processing_seconds"] == 3.0
+    assert performance["per_stage_seconds"] == {
+        "video_inspection": 1.5,
+        "quality_gate": 0.5,
+    }
+    assert performance["mean_latency_seconds"] == 1.5
 
 
 def test_cli_golden_writes_json(tmp_path) -> None:

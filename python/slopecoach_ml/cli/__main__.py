@@ -8,7 +8,12 @@ from typing import Any
 
 from slopecoach_ml.benchmark import benchmark_golden, benchmark_video
 from slopecoach_ml.quality import VideoQualityGate, VideoQualityStatus
-from slopecoach_ml.reference import analyze_pose_frame, load_golden_fixture
+from slopecoach_ml.reference import (
+    ReferenceAnalysisConfig,
+    ReferenceAnalysisContext,
+    analyze_pose_frame,
+    load_golden_fixture,
+)
 from slopecoach_ml.video import inspect_video
 
 
@@ -49,7 +54,16 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "golden":
         frame, expected = load_golden_fixture(args.fixture)
-        result = analyze_pose_frame(frame)
+        result = analyze_pose_frame(
+            frame,
+            context=ReferenceAnalysisContext(
+                analysis_id="golden-pose-001",
+                provider_name="golden-fixture",
+                model_id="golden-pose-001",
+                model_version="golden-pose-v1",
+            ),
+            config=ReferenceAnalysisConfig(),
+        )
         actual = result.features["left_knee_angle_2d_degrees"]
         passed = (
             actual is not None

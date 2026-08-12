@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A1: AI Research / Reference Foundation**. The code in
+SlopeCoach is currently in **Phase A1.1: Research Foundation Hardening**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -70,9 +70,20 @@ packages are modified.
 
 Every pose entering reference biomechanics is validated as `SourcePixel2D`: top-left origin,
 x right, y down, source-frame pixels, canonical upright orientation, and corrected mirroring.
-Crop, resize, and letterbox transforms must already have been inverted by a concrete provider.
-BBoxes and keypoints must share this coordinate space. Invalid or unknown geometry fails
-explicitly.
+The reference coordinate adapter records crop, resize, and letterbox and inverts them in reverse
+order before the canonical boundary. Orientation and mirror correction remain the responsibility
+of a future concrete provider/native preprocessing path. BBoxes and keypoints share the canonical
+space, and no coordinate is automatically clamped.
+
+Finite canonical coordinates may lie outside the visible source rectangle. Contract validity and
+visibility are deliberately separate: keypoints expose `is_inside_frame`, while bboxes expose
+intersection and visible-fraction helpers. Current `knee_angle_2d` conservatively requires its
+hip, knee, and ankle evidence to be visible; unrelated out-of-frame joints do not invalidate it.
+
+`FrameGeometry` truthfully represents non-square source pixels. The current image-plane knee
+angle only supports pixel aspect ratios approximately equal to 1.0; unsupported non-square
+geometry produces `null` plus `NON_SQUARE_PIXEL_ASPECT_RATIO_UNSUPPORTED`, never a misleading
+angle.
 
 Canonical joints use `COCO17_V1` identities and lookup APIs; biomechanics does not interpret
 array indices. The model-schema adapter is an explicit, currently unconfigured boundary.
@@ -117,6 +128,26 @@ artifacts/debug/
 
 The debug skeleton renderer is deferred. No expert-labeled ground truth is present, so
 `REAL_GT_STATUS = NOT_AVAILABLE` and diagnosis precision, recall, and F1 remain JSON `null`.
+
+Benchmark inputs are explicitly classified as `GOLDEN_FIXTURE`, `SYNTHETIC_METADATA_SMOKE`, or
+`REAL_VIDEO`. Synthetic ffprobe integration media must never be reported as a real ski-video
+benchmark. No user-provided real ski video was available in Phase A1.1, so
+`REAL_VIDEO_BENCHMARK = NOT_EXECUTED_NO_REAL_VIDEO_INPUT`.
+
+## Target safety and CI
+
+Target Identity is not implemented. Zero persons yields no target feature; exactly one person may
+use the single-person reference path; more than one person yields `null` target biomechanics and
+`MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED`. Detection ordering, bbox size/position, and
+confidence are never treated as Target Identity. Track ID is not Target Identity.
+
+The provisional `ReferenceAnalysisConfig` centrally defines the joint confidence and square-pixel
+tolerance. Callers explicitly provide analysis/provider/model provenance, preventing future real
+providers from inheriting Golden labels.
+
+Pull requests and pushes to `main` run `.github/workflows/python-ci.yml`: lock validation, Python
+3.12 environment sync, formatting, lint, tests, Golden CLI, and Golden benchmark. The workflow has
+been validated with locally equivalent commands; that does not claim a GitHub-hosted run passed.
 
 ## Provider status and deferred work
 

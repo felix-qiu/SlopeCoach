@@ -7,12 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from slopecoach_ml.quality import VideoQualityGate
-from slopecoach_ml.reference import analyze_pose_frame, load_golden_fixture
+from slopecoach_ml.reference import (
+    ReferenceAnalysisConfig,
+    ReferenceAnalysisContext,
+    analyze_pose_frame,
+    load_golden_fixture,
+)
 from slopecoach_ml.video import inspect_video
 
 
-def _performance(started: float, stages: dict[str, float], samples: list[float]) -> dict[str, Any]:
-    total = time.perf_counter() - started
+def _performance(*, total: float, stages: dict[str, float], samples: list[float]) -> dict[str, Any]:
     ordered = sorted(samples)
     p95 = None
     if len(ordered) >= 20:
@@ -37,14 +41,26 @@ def _base() -> dict[str, Any]:
     }
 
 
-def benchmark_golden(path: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    started = time.perf_counter()
-    stage_start = time.perf_counter()
+def benchmark_golden(
+    path: str | Path, *, clock: Callable[[], float] = time.perf_counter
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    started = clock()
+    stage_start = clock()
     frame, expected = load_golden_fixture(path)
-    parse_time = time.perf_counter() - stage_start
-    stage_start = time.perf_counter()
-    result = analyze_pose_frame(frame)
-    analysis_time = time.perf_counter() - stage_start
+    parse_time = clock() - stage_start
+    stage_start = clock()
+    result = analyze_pose_frame(
+        frame,
+        context=ReferenceAnalysisContext(
+            analysis_id="golden-pose-001",
+            provider_name="golden-fixture",
+            model_id="golden-pose-001",
+            model_version="golden-pose-v1",
+        ),
+        config=ReferenceAnalysisConfig(),
+    )
+    analysis_time = clock() - stage_start
+    finished = clock()
     angle = result.features["left_knee_angle_2d_degrees"]
     expected_angle = float(expected["left_knee_angle_2d_degrees"])
     tolerance = float(expected["absolute_tolerance"])
@@ -63,7 +79,9 @@ def benchmark_golden(path: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
             },
             "biomechanics": {"knee_angle_2d_coverage": 1.0 if angle is not None else 0.0},
             "performance": _performance(
-                started, {"parse": parse_time, "analysis": analysis_time}, [analysis_time]
+                total=finished - started,
+                stages={"parse": parse_time, "analysis": analysis_time},
+                samples=[analysis_time],
             ),
             "golden_passed": passed,
         }
@@ -72,8 +90,13 @@ def benchmark_golden(path: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def benchmark_video(
-    path: str | Path, *, clock: Callable[[], float] = time.perf_counter
+    path: str | Path,
+    *,
+    input_kind: str = "REAL_VIDEO",
+    clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
+    if input_kind not in {"REAL_VIDEO", "SYNTHETIC_METADATA_SMOKE"}:
+        raise ValueError("video input_kind must be REAL_VIDEO or SYNTHETIC_METADATA_SMOKE")
     started = clock()
     stage_start = clock()
     metadata = inspect_video(path)
@@ -81,19 +104,20 @@ def benchmark_video(
     stage_start = clock()
     quality = VideoQualityGate().evaluate(metadata)
     quality_time = clock() - stage_start
+    finished = clock()
     report = _base()
     report.update(
         {
-            "input_kind": "REAL_VIDEO_METADATA",
+            "input_kind": input_kind,
             "pose_provider": "NOT_CONFIGURED",
             "video_metadata": metadata.to_dict(),
             "video_quality": quality.to_dict(),
             "pose": {"coverage": None, "confidence": None, "stability": None},
             "biomechanics": {"knee_angle_2d_coverage": None},
             "performance": _performance(
-                started,
-                {"video_inspection": inspect_time, "quality_gate": quality_time},
-                [inspect_time],
+                total=finished - started,
+                stages={"video_inspection": inspect_time, "quality_gate": quality_time},
+                samples=[inspect_time],
             ),
         }
     )

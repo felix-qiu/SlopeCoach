@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import json
+from pathlib import Path
 
 import pytest
 
@@ -68,6 +70,84 @@ def test_bbox_keypoint_coordinate_consistency() -> None:
 def test_non_finite_keypoint_is_rejected() -> None:
     with pytest.raises(ValueError, match="finite"):
         Keypoint2D(math.nan, 20, 0.9).validate(geometry())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("width_px", "640"),
+        ("width_px", True),
+        ("height_px", 480.0),
+        ("mirrored", "false"),
+    ],
+)
+def test_strict_geometry_parsing_rejects_coercion(field: str, value: object) -> None:
+    data = {
+        "width_px": 640,
+        "height_px": 480,
+        "pixel_aspect_ratio": 1.0,
+        "coordinate_space": "SourcePixel2D",
+        "orientation": "CanonicalUpright",
+        "mirrored": False,
+    }
+    data[field] = value
+    with pytest.raises((TypeError, ValueError)):
+        FrameGeometry.from_dict(data)
+
+
+@pytest.mark.parametrize("value", ["1.0", True, math.nan, math.inf])
+def test_strict_numeric_keypoint_parsing(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        Keypoint2D.from_dict({"x_px": value, "y_px": 2, "confidence": 0.9})
+
+
+@pytest.mark.parametrize("value", ["0.9", True, math.nan, 1.1])
+def test_malformed_confidence_rejected(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        point = Keypoint2D.from_dict({"x_px": 1, "y_px": 2, "confidence": value})
+        point.validate(geometry())
+
+
+@pytest.mark.parametrize("value", [0, -1, math.nan, math.inf])
+def test_invalid_pixel_aspect_ratio_rejected(value: float) -> None:
+    with pytest.raises(ValueError):
+        FrameGeometry(640, 480, pixel_aspect_ratio=value).validate()
+
+
+def test_out_of_frame_coordinates_are_preserved_and_visible_separately() -> None:
+    negative = Keypoint2D(-3.5, 20, 0.9)
+    beyond = Keypoint2D(700, 20, 0.9)
+    negative.validate(geometry())
+    beyond.validate(geometry())
+    assert negative.x_px == -3.5
+    assert not negative.is_inside_frame(geometry())
+    assert not beyond.is_inside_frame(geometry())
+
+
+def test_partially_outside_bbox_has_visibility_without_clamping() -> None:
+    bbox = BoundingBox2D(-10, 20, 100, 100)
+    bbox.validate(geometry())
+    assert bbox.x_px == -10
+    assert bbox.intersects_frame(geometry())
+    assert bbox.visible_fraction(geometry()) == pytest.approx(0.9)
+    outside = BoundingBox2D(-200, 20, 50, 50)
+    assert outside.visible_fraction(geometry()) == 0
+
+
+@pytest.mark.parametrize("size", [0, -1])
+def test_invalid_bbox_size_rejected(size: float) -> None:
+    with pytest.raises(ValueError, match="dimensions"):
+        BoundingBox2D(0, 0, size, 10).validate(geometry())
+
+
+@pytest.mark.parametrize("field", ["timestamp_us", "frame_index"])
+def test_string_integer_frame_fields_rejected(field: str) -> None:
+    data = json.loads(
+        (Path(__file__).parents[1] / "fixtures/golden_pose_001.json").read_text()
+    )["pose_frame"]
+    data[field] = "1000"
+    with pytest.raises(TypeError):
+        PoseFrame.from_dict(data)
 
 
 def test_coco17_schema_and_lookup() -> None:

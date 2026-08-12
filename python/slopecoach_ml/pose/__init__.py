@@ -9,6 +9,7 @@ from .contracts import (
     PersonPose2D,
     PoseFrame,
 )
+from .coordinates import ModelPoint2D, PreprocessTransform2D
 from .providers import MockPoseProvider, PoseProvider
 
 __all__ = [
@@ -23,4 +24,6 @@ __all__ = [
     "PoseFrame",
     "MockPoseProvider",
     "PoseProvider",
+    "ModelPoint2D",
+    "PreprocessTransform2D",
 ]

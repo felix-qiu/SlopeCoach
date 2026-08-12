@@ -44,7 +44,34 @@ COCO17_V1 = "COCO17_V1"
 COCO17_JOINTS = frozenset(Joint)
 
 
-def _finite(value: float, name: str) -> None:
+def _integer(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    return value
+
+
+def _number(value: Any, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"{name} must be numeric")
+    _finite(value, name)
+    return float(value)
+
+
+def _boolean(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return value
+
+
+def _string(value: Any, name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    return value
+
+
+def _finite(value: int | float, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"{name} must be numeric")
     if not math.isfinite(value):
         raise ValueError(f"{name} must be finite")
 
@@ -59,6 +86,8 @@ class FrameGeometry:
     mirrored: bool = False
 
     def validate(self) -> None:
+        _integer(self.width_px, "width_px")
+        _integer(self.height_px, "height_px")
         if self.width_px <= 0 or self.height_px <= 0:
             raise ValueError("frame dimensions must be positive")
         _finite(self.pixel_aspect_ratio, "pixel_aspect_ratio")
@@ -68,18 +97,19 @@ class FrameGeometry:
             raise ValueError("biomechanics requires SourcePixel2D coordinates")
         if self.orientation is not FrameOrientation.CANONICAL_UPRIGHT:
             raise ValueError("frame orientation must be CanonicalUpright")
+        _boolean(self.mirrored, "mirrored")
         if self.mirrored:
             raise ValueError("mirroring must be corrected before the canonical boundary")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FrameGeometry:
         geometry = cls(
-            width_px=int(data["width_px"]),
-            height_px=int(data["height_px"]),
-            pixel_aspect_ratio=float(data.get("pixel_aspect_ratio", 1.0)),
+            width_px=_integer(data["width_px"], "width_px"),
+            height_px=_integer(data["height_px"], "height_px"),
+            pixel_aspect_ratio=_number(data.get("pixel_aspect_ratio", 1.0), "pixel_aspect_ratio"),
             coordinate_space=CoordinateSpace(data["coordinate_space"]),
             orientation=FrameOrientation(data["orientation"]),
-            mirrored=bool(data["mirrored"]),
+            mirrored=_boolean(data["mirrored"], "mirrored"),
         )
         geometry.validate()
         return geometry
@@ -113,15 +143,17 @@ class Keypoint2D:
             raise ValueError("keypoint confidence must be in [0, 1]")
         if self.coordinate_space is not geometry.coordinate_space:
             raise ValueError("keypoint and frame coordinate spaces differ")
-        if not 0.0 <= self.x_px < geometry.width_px or not 0.0 <= self.y_px < geometry.height_px:
-            raise ValueError("keypoint is outside source-frame bounds")
+
+    def is_inside_frame(self, geometry: FrameGeometry) -> bool:
+        self.validate(geometry)
+        return 0.0 <= self.x_px < geometry.width_px and 0.0 <= self.y_px < geometry.height_px
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Keypoint2D:
         return cls(
-            x_px=float(data["x_px"]),
-            y_px=float(data["y_px"]),
-            confidence=float(data["confidence"]),
+            x_px=_number(data["x_px"], "x_px"),
+            y_px=_number(data["y_px"], "y_px"),
+            confidence=_number(data["confidence"], "confidence"),
             coordinate_space=CoordinateSpace(data.get("coordinate_space", "SourcePixel2D")),
         )
 
@@ -154,21 +186,28 @@ class BoundingBox2D:
             raise ValueError("bbox and frame coordinate spaces differ")
         if self.width_px <= 0 or self.height_px <= 0:
             raise ValueError("bbox dimensions must be positive")
-        if self.x_px < 0 or self.y_px < 0:
-            raise ValueError("bbox origin is outside source-frame bounds")
-        if (
-            self.x_px + self.width_px > geometry.width_px
-            or self.y_px + self.height_px > geometry.height_px
-        ):
-            raise ValueError("bbox extends outside source-frame bounds")
+
+    def intersection_area(self, geometry: FrameGeometry) -> float:
+        self.validate(geometry)
+        left = max(0.0, self.x_px)
+        top = max(0.0, self.y_px)
+        right = min(float(geometry.width_px), self.x_px + self.width_px)
+        bottom = min(float(geometry.height_px), self.y_px + self.height_px)
+        return max(0.0, right - left) * max(0.0, bottom - top)
+
+    def intersects_frame(self, geometry: FrameGeometry) -> bool:
+        return self.intersection_area(geometry) > 0.0
+
+    def visible_fraction(self, geometry: FrameGeometry) -> float:
+        return self.intersection_area(geometry) / (self.width_px * self.height_px)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BoundingBox2D:
         return cls(
-            x_px=float(data["x_px"]),
-            y_px=float(data["y_px"]),
-            width_px=float(data["width_px"]),
-            height_px=float(data["height_px"]),
+            x_px=_number(data["x_px"], "bbox.x_px"),
+            y_px=_number(data["y_px"], "bbox.y_px"),
+            width_px=_number(data["width_px"], "bbox.width_px"),
+            height_px=_number(data["height_px"], "bbox.height_px"),
             coordinate_space=CoordinateSpace(data.get("coordinate_space", "SourcePixel2D")),
         )
 
@@ -213,12 +252,16 @@ class PersonPose2D:
             }
         except (TypeError, KeyError) as error:
             raise ValueError("malformed keypoint data") from error
-        return cls(
-            detection_id=data.get("detection_id"),
+        detection_id = data.get("detection_id")
+        if detection_id is not None:
+            detection_id = _integer(detection_id, "detection_id")
+        person = cls(
+            detection_id=detection_id,
             bbox=BoundingBox2D.from_dict(data["bbox"]),
-            person_confidence=float(data["person_confidence"]),
+            person_confidence=_number(data["person_confidence"], "person_confidence"),
             keypoints=keypoints,
         )
+        return person
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -240,6 +283,8 @@ class PoseFrame:
 
     def validate(self) -> None:
         self.geometry.validate()
+        _integer(self.timestamp_us, "timestamp_us")
+        _integer(self.frame_index, "frame_index")
         if self.joint_schema != COCO17_V1:
             raise ValueError(f"unsupported joint schema: {self.joint_schema}")
         if self.timestamp_us < 0 or self.frame_index < 0:
@@ -249,13 +294,16 @@ class PoseFrame:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PoseFrame:
+        persons = data["persons"]
+        if not isinstance(persons, list):
+            raise TypeError("persons must be an array")
         frame = cls(
-            contract_version=str(data["contract_version"]),
-            timestamp_us=int(data["timestamp_us"]),
-            frame_index=int(data.get("frame_index", 0)),
+            contract_version=_string(data["contract_version"], "contract_version"),
+            timestamp_us=_integer(data["timestamp_us"], "timestamp_us"),
+            frame_index=_integer(data.get("frame_index", 0), "frame_index"),
             geometry=FrameGeometry.from_dict(data["frame_geometry"]),
-            joint_schema=str(data["joint_schema"]),
-            persons=tuple(PersonPose2D.from_dict(person) for person in data["persons"]),
+            joint_schema=_string(data["joint_schema"], "joint_schema"),
+            persons=tuple(PersonPose2D.from_dict(person) for person in persons),
         )
         frame.validate()
         return frame

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,43 @@ from slopecoach_ml.biomechanics import knee_angle_2d
 from slopecoach_ml.pose import PoseFrame
 from slopecoach_ml.quality import VideoQuality
 from slopecoach_ml.video import VideoMetadata
+
+NON_SQUARE_PIXEL_ASPECT_RATIO_UNSUPPORTED = "NON_SQUARE_PIXEL_ASPECT_RATIO_UNSUPPORTED"
+MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED = "MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED"
+
+
+@dataclass(frozen=True)
+class ReferenceAnalysisConfig:
+    """PROVISIONAL / REFERENCE ONLY; not a production contract source of truth."""
+
+    min_joint_confidence: float = 0.5
+    square_pixel_tolerance: float = 1e-6
+
+    def validate(self) -> None:
+        if isinstance(self.min_joint_confidence, bool) or not isinstance(
+            self.min_joint_confidence, int | float
+        ):
+            raise TypeError("min_joint_confidence must be numeric")
+        if not math.isfinite(self.min_joint_confidence):
+            raise ValueError("min_joint_confidence must be finite")
+        if not 0.0 <= self.min_joint_confidence <= 1.0:
+            raise ValueError("min_joint_confidence must be in [0, 1]")
+        if isinstance(self.square_pixel_tolerance, bool) or not isinstance(
+            self.square_pixel_tolerance, int | float
+        ):
+            raise TypeError("square_pixel_tolerance must be numeric")
+        if not math.isfinite(self.square_pixel_tolerance):
+            raise ValueError("square_pixel_tolerance must be finite")
+        if self.square_pixel_tolerance < 0:
+            raise ValueError("square_pixel_tolerance must be non-negative")
+
+
+@dataclass(frozen=True)
+class ReferenceAnalysisContext:
+    analysis_id: str
+    provider_name: str | None = None
+    model_id: str | None = None
+    model_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -43,14 +81,40 @@ def load_golden_fixture(path: str | Path) -> tuple[PoseFrame, dict[str, Any]]:
 
 
 def analyze_pose_frame(
-    frame: PoseFrame, *, analysis_id: str = "golden-pose-001"
+    frame: PoseFrame,
+    *,
+    context: ReferenceAnalysisContext,
+    config: ReferenceAnalysisConfig,
 ) -> ReferenceAnalysisResult:
     frame.validate()
-    person = frame.persons[0] if frame.persons else None
-    angle = knee_angle_2d(person, frame.geometry) if person is not None else None
-    warnings = () if person is not None else ("no person pose available",)
+    config.validate()
+    warnings: list[str] = []
+    limitations = ["IMAGE_2D_ONLY_NOT_PHYSICAL_3D"]
+    person = frame.persons[0] if len(frame.persons) == 1 else None
+    if not frame.persons:
+        warnings.append("no person pose available")
+    elif len(frame.persons) > 1:
+        warnings.append(MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED)
+        limitations.append(MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED)
+    if not math.isclose(
+        frame.geometry.pixel_aspect_ratio,
+        1.0,
+        rel_tol=0.0,
+        abs_tol=config.square_pixel_tolerance,
+    ):
+        limitations.append(NON_SQUARE_PIXEL_ASPECT_RATIO_UNSUPPORTED)
+    angle = (
+        knee_angle_2d(
+            person,
+            frame.geometry,
+            minimum_confidence=config.min_joint_confidence,
+            square_pixel_tolerance=config.square_pixel_tolerance,
+        )
+        if person is not None
+        else None
+    )
     return ReferenceAnalysisResult(
-        analysis_id=analysis_id,
+        analysis_id=context.analysis_id,
         reference_contract_version="python-reference-v1",
         video_metadata=None,
         video_quality=None,
@@ -60,7 +124,11 @@ def analyze_pose_frame(
             "joint_schema": frame.joint_schema,
         },
         features={"left_knee_angle_2d_degrees": angle},
-        warnings=warnings,
-        limitations=("Image2D measurement only; not Physical3D or physical edge angle.",),
-        model_versions={"detector": None, "pose": "golden-fixture"},
+        warnings=tuple(warnings),
+        limitations=tuple(limitations),
+        model_versions={
+            "provider": context.provider_name,
+            "model_id": context.model_id,
+            "model_version": context.model_version,
+        },
     )
