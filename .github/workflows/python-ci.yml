@@ -1,0 +1,36 @@
+name: Python Research CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  reference-foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.21"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify lockfile
+        run: uv lock --project python --check
+      - name: Sync development environment
+        run: uv sync --project python --dev --python 3.12
+      - name: Check formatting
+        run: uv run --project python ruff format --check python tests
+      - name: Lint
+        run: uv run --project python ruff check python tests
+      - name: Unit tests
+        run: uv run --project python pytest
+      - name: Golden CLI
+        run: uv run --project python python -m slopecoach_ml.cli golden
+      - name: Golden benchmark
+        run: uv run --project python python -m slopecoach_ml.cli benchmark fixtures/golden_pose_001.json
