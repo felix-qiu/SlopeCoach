@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A1.1: Research Foundation Hardening**. The code in
+SlopeCoach is currently in **Phase A2: Real RTMW Pose Provider + Pose Benchmark**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -151,10 +151,60 @@ been validated with locally equivalent commands; that does not claim a GitHub-ho
 
 ## Provider status and deferred work
 
-`DetectorProvider` and `PoseProvider` interfaces plus deterministic mock implementations exist.
-No RTMDet, RTMW, YOLO, or other real model/provider is claimed or downloaded.
+Phase A2 defines an optional OpenMMLab research stack isolated from the minimal Python 3.12
+environment. The validated candidate is Python 3.11 with PyTorch 2.1.2, TorchVision 0.16.2,
+MMCV 2.1.0, MMEngine 0.10.7, MMDetection 3.2.0, and MMPose 1.3.2. Install it separately:
 
-Not implemented in Phase A1: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+```bash
+uv venv artifacts/openmmlab-venv --python 3.11
+uv pip install --python artifacts/openmmlab-venv/bin/python "setuptools<81" wheel pip packaging
+uv pip install --python artifacts/openmmlab-venv/bin/python \
+  -r python/openmmlab-requirements.txt --no-build-isolation
+```
+
+On Apple Silicon, MMCV 2.1.0 needs a source build with compiled ops after PyTorch is present.
+The current machine installed all pinned distributions, but `mmcv._ext` was not produced and
+official `mmdet.apis` therefore cannot load. `OPENMMLAB_RUNTIME_STATUS = BLOCKED` until an
+officially compatible build provides those ops; no third-party version checks or source files
+are patched to bypass this.
+
+The configured detector is official RTMDet-m 640 COCO/Objects365 person detection; pose is
+official RTMW-L Cocktail14 256x192 (`20231122`). Exact sources and nullable, post-download SHA256
+fields live in `models/registry.json`. Weights belong under ignored `artifacts/models/` and are
+never committed. MMPose code is Apache-2.0; checkpoint license fields remain null where the
+official listing does not explicitly provide separate terms.
+
+```bash
+make pose-doctor
+make pose-smoke IMAGE=/path/to/image.jpg
+make benchmark-real-pose VIDEO=/path/to/ski.mov
+```
+
+These Make targets explicitly attest that input media is non-mirrored. Direct CLI calls must pass
+`--input-non-mirrored`; otherwise they fail with `MIRROR_STATE_UNRESOLVED` rather than guessing.
+
+The real commands require explicit `SLOPECOACH_DETECTOR_CONFIG`,
+`SLOPECOACH_DETECTOR_CHECKPOINT`, `SLOPECOACH_POSE_CONFIG`, and
+`SLOPECOACH_POSE_CHECKPOINT` paths. Help and package imports never download weights.
+
+RTMW uses the official COCO-WholeBody 133-keypoint metainfo. A single named mapping converts body
+identities 0–16 to `COCO17_V1`, with tested left/right semantics. Official MMPose top-down
+inference restores predictions to the original input image; the provider therefore treats that
+boundary as SourcePixel2D and does not apply a second inverse transform.
+
+Video sampling uses decoded timestamps. Supported display rotations are explicitly normalized
+before inference; ambiguous rotations fail. Mirror state must already be known non-mirrored.
+Canonical debug overlays are written under ignored `artifacts/debug/`.
+
+Target Identity remains unavailable: detections are observations, not tracks or target IDs.
+Multi-person frames retain every pose but return null target biomechanics. Real-pose benchmarks
+measure coverage, confidence, coordinate visibility, and latency—not diagnosis accuracy.
+
+No user-provided ski video currently exists in documented benchmark locations, so
+`REAL_VIDEO_BENCHMARK = NOT_EXECUTED_NO_REAL_VIDEO_INPUT`. The local OpenMMLab runtime and weights
+must pass `pose-doctor` before real inference may be claimed READY.
+
+Not implemented in Phase A2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
 the production Rust Domain Kernel, real tracking/identity/ReID/temporal/turn/diagnosis
 pipelines, LLMs, QNN, TensorRT, physical 3D edge angle, live camera coaching, complex UI, or
 first-party C++. Mobile integration and the Rust production implementation are explicitly

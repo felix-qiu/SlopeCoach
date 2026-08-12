@@ -12,6 +12,13 @@ class Detection:
     bbox: BoundingBox2D
     confidence: float
 
+    def validate(self, geometry: FrameGeometry) -> None:
+        if isinstance(self.detection_id, bool) or not isinstance(self.detection_id, int):
+            raise TypeError("detection_id must be an integer")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("detection confidence must be in [0, 1]")
+        self.bbox.validate(geometry)
+
 
 class DetectorProvider(Protocol):
     name: str

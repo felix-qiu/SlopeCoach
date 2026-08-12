@@ -6,3 +6,5 @@ __pycache__/
 .ruff_cache/
 *.pyc
 artifacts/
+models/*.pth
+models/*.onnx
