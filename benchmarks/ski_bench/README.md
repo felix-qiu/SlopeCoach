@@ -82,3 +82,20 @@ A4. `TURN_SEGMENTATION_GT_STATUS = NOT_AVAILABLE`, and turn precision, recall, a
 The target template remains wholly `UNLABELED`; target identity accuracy remains unknown. A4.1 is
 engineering/reference validation only and implements neither diagnosis nor true skiing-direction
 semantics.
+
+Phase A5 adds `benchmark-biomechanics` and contract `ski-bench-biomechanics-v1`. It composes the
+existing A3/A4/A4.1 pipeline rather than selecting a target again, then emits 14 frame-level 2D
+facts, per-temporal-segment statistics and timestamp derivatives, plus turn facts only for A4.1
+`VALID`/`PARTIAL` segments within the same signal run. A run with trusted frame/segment evidence
+and no qualified turn is honestly `EXECUTED_FRAME_AND_SEGMENT_FEATURES_NO_TURNS`.
+
+```bash
+make benchmark-biomechanics \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a5/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a5_biomechanics/ski_test_001_5fps
+```
+
+Biomechanics GT is unavailable, so feature accuracy and MAE remain `null`. Coverage is evidence
+availability, not accuracy. Facts are camera-dependent image-space proxies without diagnosis,
+scores, physical COM, physical edge angle, or a frozen ML feature vector.

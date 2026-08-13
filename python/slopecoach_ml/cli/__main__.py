@@ -12,14 +12,17 @@ from slopecoach_ml.benchmark import (
     RealPoseDebugCollector,
     TargetIdentityDebugCollector,
     TemporalTurnCollector,
+    benchmark_biomechanics_frames,
     benchmark_golden,
     benchmark_real_pose_frames,
     benchmark_target_identity_frames,
     benchmark_temporal_turns_frames,
     benchmark_video,
+    write_biomechanics_debug_artifacts,
     write_ground_truth_comparison,
     write_temporal_debug_artifacts,
 )
+from slopecoach_ml.biomechanics.golden import run_biomechanics_golden
 from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
     OpenMMLabMMDetBackend,
@@ -118,6 +121,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--fixture", default=str(_root() / "fixtures/golden_turn_signal_001.json")
     )
     turn_golden.add_argument("--output")
+    biomechanics_golden = subparsers.add_parser(
+        "biomechanics-golden", help="run deterministic A5 temporal biomechanics Golden"
+    )
+    biomechanics_golden.add_argument(
+        "--fixture",
+        default=str(_root() / "fixtures/golden_temporal_biomechanics_001.json"),
+    )
+    biomechanics_golden.add_argument("--output")
     temporal_turns = subparsers.add_parser(
         "benchmark-temporal-turns", help="run A4 temporal pose and turn benchmark"
     )
@@ -127,6 +138,15 @@ def build_parser() -> argparse.ArgumentParser:
     temporal_turns.add_argument("--debug-dir")
     temporal_turns.add_argument("--max-debug-frames", type=int, default=12)
     temporal_turns.add_argument("--input-non-mirrored", action="store_true")
+    biomechanics = subparsers.add_parser(
+        "benchmark-biomechanics", help="run A5 temporal biomechanics benchmark"
+    )
+    biomechanics.add_argument("video")
+    biomechanics.add_argument("--sample-fps", type=float, default=5.0)
+    biomechanics.add_argument("--output")
+    biomechanics.add_argument("--debug-dir")
+    biomechanics.add_argument("--max-debug-frames", type=int, default=12)
+    biomechanics.add_argument("--input-non-mirrored", action="store_true")
     return parser
 
 
@@ -183,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "turn-golden":
         result = run_turn_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "biomechanics-golden":
+        result = run_biomechanics_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
@@ -278,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         "benchmark-real-pose",
         "benchmark-target-identity",
         "benchmark-temporal-turns",
+        "benchmark-biomechanics",
     }:
         if not args.input_non_mirrored:
             raise RuntimeError(
@@ -364,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             _write_json(report, args.output)
             return 0
-        if args.command == "benchmark-temporal-turns":
+        if args.command in {"benchmark-temporal-turns", "benchmark-biomechanics"}:
             collector = TemporalTurnCollector(keep_images=bool(args.debug_dir))
             identity_template = (
                 _root()
@@ -376,7 +401,12 @@ def main(argv: list[str] | None = None) -> int:
                 if identity_template.is_file()
                 else "NOT_AVAILABLE"
             )
-            report = benchmark_temporal_turns_frames(
+            benchmark_runner = (
+                benchmark_biomechanics_frames
+                if args.command == "benchmark-biomechanics"
+                else benchmark_temporal_turns_frames
+            )
+            report = benchmark_runner(
                 input_path=args.video,
                 frames=OpenCVVideoSampler(args.video, sample_fps=args.sample_fps),
                 detector=detector,
@@ -391,9 +421,11 @@ def main(argv: list[str] | None = None) -> int:
                 target_identity_gt_status=identity_gt_status,
             )
             report["debug_artifacts"] = (
-                write_temporal_debug_artifacts(
-                    args.debug_dir, report, collector, max_frames=args.max_debug_frames
-                )
+                (
+                    write_biomechanics_debug_artifacts
+                    if args.command == "benchmark-biomechanics"
+                    else write_temporal_debug_artifacts
+                )(args.debug_dir, report, collector, max_frames=args.max_debug_frames)
                 if args.debug_dir
                 else {
                     "selected_frame_indices": [],
@@ -404,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
                     "turn_events": None,
                 }
             )
+            report.pop("_upstream_debug_report", None)
             _write_json(report, args.output)
             return 0
         debug_collector = RealPoseDebugCollector() if args.debug_dir else None

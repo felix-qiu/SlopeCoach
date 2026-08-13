@@ -1,0 +1,39 @@
+{
+  "contract_version": "golden-temporal-biomechanics-v1",
+  "description": "Three human-checkable symmetric poses: 90, 60, 90 degree bilateral knees at irregular timestamps. Frame 3 is a uniformly scaled and translated copy of frame 1.",
+  "frame_geometry": {
+    "width_px": 800,
+    "height_px": 600,
+    "pixel_aspect_ratio": 1.0,
+    "coordinate_space": "SourcePixel2D",
+    "orientation": "CanonicalUpright",
+    "mirrored": false
+  },
+  "samples": [
+    {"timestamp_us": 0, "temporal_segment_id": 1, "scale": 1.0, "translate": [200.0, 100.0], "knee_angle_deg": 90.0},
+    {"timestamp_us": 500000, "temporal_segment_id": 1, "scale": 1.0, "translate": [200.0, 100.0], "knee_angle_deg": 60.0},
+    {"timestamp_us": 1500000, "temporal_segment_id": 1, "scale": 1.0, "translate": [200.0, 100.0], "knee_angle_deg": 90.0},
+    {"timestamp_us": 2000000, "temporal_segment_id": 2, "scale": 2.0, "translate": [350.0, 50.0], "knee_angle_deg": 90.0}
+  ],
+  "turn": {
+    "turn_id": "turn-1",
+    "temporal_segment_id": 1,
+    "signal_run_id": 1,
+    "start_timestamp_us": 0,
+    "apex_timestamp_us": 500000,
+    "end_timestamp_us": 1500000,
+    "peak_value": 0.8,
+    "prominence": 0.8,
+    "phase_sign": "POSITIVE_PHASE"
+  },
+  "expected": {
+    "frame_1_knee_angle_deg": 90.0,
+    "frame_1_bilateral_difference_deg": 0.0,
+    "frame_1_ankle_separation_body_scale": 0.2,
+    "segment_knee_median_deg": 90.0,
+    "knee_abs_velocity_median_deg_per_s": 45.0,
+    "start_to_apex_delta_deg": -30.0,
+    "apex_to_end_delta_deg": 30.0,
+    "minimum_angle_offset_from_apex_us": 0
+  }
+}

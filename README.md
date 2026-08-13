@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A4.1: Turn Signal & Segmentation Hardening**. The code in
+SlopeCoach is currently in **Phase A5: Temporal Biomechanics Feature Layer**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -176,6 +176,31 @@ take its median per temporal segment, and use that single segment scale for both
 differences. Segments without a truthful scale are excluded and counted. These normalization
 semantics differ from v1's historical asymmetric per-frame denominator, so v1 and v2 stability
 numbers are not directly comparable and old v1 artifacts must not be rewritten.
+
+## A5 temporal biomechanics facts
+
+A5 adds the provisional `temporal-biomechanics-v1` research contract after trusted stabilized
+target pose. Its deterministic registry contains 14 frame facts grouped as stance, balance,
+symmetry, timing, and edge-control proxies. These families are organizational labels—not scores,
+diagnoses, or coaching conclusions. `FIXED_ML_FEATURE_VECTOR_STATUS = NOT_FROZEN`.
+
+The flow is `StabilizedPoseSample -> frame facts -> temporal-segment aggregates -> A4.1-gated turn
+facts`. Every fact records unit, required joints, support confidence, observed/interpolated counts,
+status, and limitations. Missing, low-confidence, out-of-frame, non-square-pixel, or degenerate
+evidence produces JSON `null`, never zero. Normalized distances reuse the A4.1 constant segment
+median raw shoulder-center-to-ankle-center body scale. Derivatives use actual timestamps and never
+bridge missing facts or temporal segments.
+
+All measurements remain image-space 2D and camera/viewpoint dependent. No output is a physical
+center of mass, physical edge angle, diagnosis, technique classification, or score. Run:
+
+```bash
+make biomechanics-golden
+make benchmark-biomechanics \
+  VIDEO=benchmarks/ski_bench/videos/example.mp4 SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a5/example_5fps.json \
+  DEBUG_DIR=artifacts/debug/a5_biomechanics/example_5fps
+```
 
 ## Real ski-video benchmark and artifacts
 
