@@ -19,9 +19,12 @@ from slopecoach_ml.turns import (
     ReferencePeakDetector,
     TurnSegmentationConfig,
     build_turn_signal,
+    classify_real_turn_status,
     detect_zero_crossings,
+    no_qualified_candidate_reason,
     segment_turns,
     segmentation_summary,
+    signal_sufficiency_diagnostics,
 )
 
 from .target_identity import benchmark_target_identity_frames
@@ -120,7 +123,11 @@ def benchmark_temporal_turns_frames(
     turn_signal_seconds = time.perf_counter() - stage
     stage = time.perf_counter()
     peaks = ReferencePeakDetector().detect(signal, turn_settings)
-    crossings = detect_zero_crossings(signal, turn_settings.zero_crossing_tolerance)
+    crossings = detect_zero_crossings(
+        signal,
+        turn_settings.zero_crossing_tolerance,
+        minimum_signal_confidence=turn_settings.minimum_signal_confidence,
+    )
     segments = segment_turns(signal, peaks, crossings, turn_settings)
     turn_segmentation_seconds = time.perf_counter() - stage
     temporal_counts = Counter()
@@ -128,28 +135,26 @@ def benchmark_temporal_turns_frames(
         temporal_counts["observed"] += sample.observed_joint_count
         temporal_counts["interpolated"] += sample.interpolated_joint_count
         temporal_counts["missing"] += sample.missing_joint_count
-    positive = sum(peak.value > 0 for peak in peaks)
-    negative = sum(peak.value < 0 for peak in peaks)
-    valid_signal = sum(sample.value is not None for sample in signal)
+    diagnostics = signal_sufficiency_diagnostics(signal, peaks, crossings, turn_settings)
+    real_turn_status = classify_real_turn_status(diagnostics, segments)
+    no_peak_reason = no_qualified_candidate_reason(real_turn_status, diagnostics, turn_settings)
     locked = sum(sample.identity_state is TargetIdentityState.LOCKED for sample in sink.samples)
-    signal_status = (
-        "PASS"
-        if valid_signal and segments
+    signal_engineering_status = (
+        "NOT_ANALYZABLE"
+        if real_turn_status.value.startswith("NOT_ANALYZABLE_")
         else "PASS_WITH_LIMITATIONS"
-        if valid_signal
-        else "NOT_ANALYZABLE"
     )
     report = {
-        "benchmark_contract_version": "ski-bench-temporal-turns-v1",
+        "benchmark_contract_version": "ski-bench-temporal-turns-v2",
         "input_kind": "REAL_VIDEO",
         "runtime": identity_report["runtime"],
         "models": identity_report["models"],
         "config": {
-            "profile": "RESEARCH_DEFAULTS_A4",
+            "profile": "RESEARCH_DEFAULTS_A4_1",
             "temporal_pose": asdict(temporal_settings),
             "turn_segmentation": asdict(turn_settings),
             "peak_detector": "ReferencePeakDetector",
-            "SCIPY_STATUS": "NOT_CONFIGURED_OPTIONAL",
+            "SCIPY_USAGE": "NOT_USED",
         },
         "video": identity_report["video"],
         "sampling": identity_report["sampling"],
@@ -171,24 +176,34 @@ def benchmark_temporal_turns_frames(
         },
         "stability": temporal.stability,
         "turn_signal": {
-            "valid_sample_count": valid_signal,
-            "missing_sample_count": len(signal) - valid_signal,
-            "positive_peak_count": positive,
-            "negative_peak_count": negative,
-            "zero_crossing_count": len(crossings),
+            "valid_sample_count": diagnostics["valid_signal_sample_count"],
+            "missing_sample_count": diagnostics["missing_signal_sample_count"],
+            "valid_signal_run_count": diagnostics["valid_signal_run_count"],
+            "longest_valid_signal_run_sample_count": diagnostics[
+                "longest_valid_signal_run_sample_count"
+            ],
+            "longest_valid_signal_run_duration_us": diagnostics[
+                "longest_valid_signal_run_duration_us"
+            ],
+            "signal_value_min": diagnostics["signal_value_min"],
+            "signal_value_max": diagnostics["signal_value_max"],
+            "signal_value_span": diagnostics["signal_value_span"],
+            "median_absolute_signal_delta": diagnostics["median_absolute_signal_delta"],
+            "positive_peak_count": diagnostics["qualified_positive_peak_count"],
+            "negative_peak_count": diagnostics["qualified_negative_peak_count"],
+            "qualified_peak_count": diagnostics["qualified_peak_count"],
+            "zero_crossing_count": diagnostics["zero_crossing_count"],
+            "no_qualified_candidate_reason": no_peak_reason,
         },
+        "signal_runs": diagnostics["signal_runs"],
         "turn_segmentation": {
             **segmentation_summary(segments),
-            "REAL_TURN_SEGMENTATION_STATUS": (
-                "EXECUTED_PROVISIONAL_CANDIDATES"
-                if segments
-                else "NOT_ANALYZABLE_INSUFFICIENT_CONTINUOUS_TARGET_POSE"
-            ),
+            "REAL_TURN_SEGMENTATION_STATUS": real_turn_status.value,
             "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE",
             "turn_precision": None,
             "turn_recall": None,
             "turn_f1": None,
-            "TURN_SEGMENTATION_ENGINEERING_STATUS": signal_status,
+            "TURN_SEGMENTATION_ENGINEERING_STATUS": signal_engineering_status,
         },
         "performance": {
             "detector_total_seconds": identity_report["performance"]["detector_total_seconds"],
@@ -207,8 +222,13 @@ def benchmark_temporal_turns_frames(
             "TEMPORAL_POSE_VALIDATION": "PASS_WITH_LIMITATIONS"
             if temporal.temporal_segment_count
             else "NOT_ANALYZABLE",
-            "A4_ENGINEERING_VALIDATION": "PASS_WITH_LIMITATIONS",
+            "A4_1_ENGINEERING_VALIDATION": (
+                "PASS"
+                if not real_turn_status.value.startswith("NOT_ANALYZABLE_")
+                else "PASS_WITH_LIMITATIONS"
+            ),
             "A4_PRODUCT_VALIDATION": "BLOCKED_BY_IDENTITY_GT",
+            "TURN_PRODUCT_VALIDATION": "BLOCKED_BY_TURN_GT",
         },
         "limitations": [
             "IMAGE_SPACE_2D_PROXY_ONLY",

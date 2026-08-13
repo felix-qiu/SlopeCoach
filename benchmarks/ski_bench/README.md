@@ -56,13 +56,29 @@ an image-space signed lower-body proxy, and provisional peak/zero-crossing segme
 uncertainty is always a hard temporal boundary; no gap is filled across it. Raw model pose and
 interpolated/stabilized evidence stay distinguishable.
 
+Phase A4.1 changes the report contract to `ski-bench-temporal-turns-v2`. Valid signal runs split at
+missing/low-confidence signal or temporal-segment changes; non-increasing timestamps inside a run
+fail validation explicitly. Extrema acceptance, zero crossings, and provisional boundaries are
+all run-local. Zero plateaus crossing
+opposite signs use the integer midpoint of the first/last zero timestamps; same-side plateaus emit
+nothing. Reports distinguish no signal, insufficient continuous signal, no qualified extrema,
+rejected candidates, and provisional candidates. No thresholds are reduced to manufacture turns.
+
+V2 stability uses one median raw symmetric shoulder-center to ankle-center scale per temporal
+segment for both raw and stabilized metrics. A4 v1 used a different per-frame asymmetric scale;
+the values are historical and not numerically comparable. Keep v1 JSON unchanged and write A4.1
+locally under `artifacts/benchmarks/a4_1/`.
+
 ```bash
 make benchmark-temporal-turns \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \
-  OUTPUT=artifacts/benchmarks/a4/ski_test_001_5fps.json \
-  DEBUG_DIR=artifacts/debug/a4_temporal_turns/ski_test_001_5fps
+  OUTPUT=artifacts/benchmarks/a4_1/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a4_1_temporal_turns/ski_test_001_5fps
 ```
 
 The signed proxy is `IMAGE_SPACE_2D_PROXY_ONLY`; phase sign is not skiing left/right and no output
 is physical edge angle or diagnosis. The current target template must remain `UNLABELED` during
 A4. `TURN_SEGMENTATION_GT_STATUS = NOT_AVAILABLE`, and turn precision, recall, and F1 stay null.
+The target template remains wholly `UNLABELED`; target identity accuracy remains unknown. A4.1 is
+engineering/reference validation only and implements neither diagnosis nor true skiing-direction
+semantics.

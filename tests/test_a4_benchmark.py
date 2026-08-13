@@ -58,7 +58,14 @@ def test_temporal_benchmark_contract_and_null_turn_gt(monkeypatch) -> None:
         sample_fps=5,
         appearance_encoder=Appearance(),
     )
-    assert report["benchmark_contract_version"] == "ski-bench-temporal-turns-v1"
+    assert report["benchmark_contract_version"] == "ski-bench-temporal-turns-v2"
+    assert report["config"]["peak_detector"] == "ReferencePeakDetector"
+    assert report["config"]["SCIPY_USAGE"] == "NOT_USED"
+    assert report["stability"]["normalization_strategy"] == (
+        "SEGMENT_MEDIAN_RAW_SHOULDER_CENTER_TO_ANKLE_CENTER"
+    )
+    assert report["turn_signal"]["qualified_peak_count"] >= 0
+    assert report["turn_signal"]["valid_signal_run_count"] >= 0
     assert (
         report["identity_input"]["target_identity_gt_annotation_status"] == "DEFERRED"
     )
@@ -69,4 +76,5 @@ def test_temporal_benchmark_contract_and_null_turn_gt(monkeypatch) -> None:
     assert report["turn_segmentation"]["turn_recall"] is None
     assert report["turn_segmentation"]["turn_f1"] is None
     assert report["validation"]["A4_PRODUCT_VALIDATION"] == "BLOCKED_BY_IDENTITY_GT"
+    assert report["validation"]["TURN_PRODUCT_VALIDATION"] == "BLOCKED_BY_TURN_GT"
     json.dumps(report, allow_nan=False)

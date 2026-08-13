@@ -26,7 +26,13 @@ def write_temporal_debug_artifacts(
         encoding="utf-8",
     )
     signal_path.write_text(
-        json.dumps(report["turn_signal_samples"], indent=2, sort_keys=True, allow_nan=False) + "\n",
+        json.dumps(
+            {"samples": report["turn_signal_samples"], "signal_runs": report["signal_runs"]},
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
     events_path.write_text(
@@ -108,9 +114,18 @@ def write_temporal_debug_artifacts(
                     2,
                 )
         proxy = signal[index]["value"]
+        signal_run_id = next(
+            (
+                run["signal_run_id"]
+                for run in report["signal_runs"]
+                if run["start_timestamp_us"] <= sample["timestamp_us"] <= run["end_timestamp_us"]
+            ),
+            None,
+        )
         label = (
             f"t={sample['timestamp_us'] / 1e6:.2f}s seg={sample['temporal_segment_id']} "
-            f"state={sample['identity_state']} proxy={proxy if proxy is not None else 'null'}"
+            f"run={signal_run_id} state={sample['identity_state']} "
+            f"proxy={proxy if proxy is not None else 'null'}"
         )
         cv2.putText(canvas, label, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
         path = destination / f"frame_{frame_index:06d}.jpg"

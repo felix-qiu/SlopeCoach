@@ -12,38 +12,54 @@ from .contracts import (
     TurnSignalSample,
     ZeroCrossing,
 )
+from .runs import valid_signal_runs
 
 
 def detect_zero_crossings(
-    samples: list[TurnSignalSample], tolerance: float = 1e-9
+    samples: list[TurnSignalSample],
+    tolerance: float = 1e-9,
+    *,
+    minimum_signal_confidence: float = 0.0,
 ) -> list[ZeroCrossing]:
-    crossings = []
-    previous = None
-    seen = set()
-    for sample in samples:
-        if sample.value is None or sample.temporal_segment_id is None:
-            previous = None
-            continue
-        if previous is not None and previous.temporal_segment_id == sample.temporal_segment_id:
-            a, b = previous.value, sample.value
-            timestamp = direction = None
-            if abs(a) <= tolerance:
-                timestamp = previous.timestamp_us
-                direction = "NEGATIVE_TO_POSITIVE" if b > 0 else "POSITIVE_TO_NEGATIVE"
-            elif abs(b) <= tolerance:
-                timestamp = sample.timestamp_us
-                direction = "NEGATIVE_TO_POSITIVE" if a < 0 else "POSITIVE_TO_NEGATIVE"
-            elif a * b < 0:
-                alpha = abs(a) / (abs(a) + abs(b))
-                timestamp = round(
-                    previous.timestamp_us + alpha * (sample.timestamp_us - previous.timestamp_us)
+    settings = TurnSegmentationConfig(
+        minimum_signal_confidence=minimum_signal_confidence,
+        zero_crossing_tolerance=tolerance,
+    )
+    crossings: list[ZeroCrossing] = []
+    for run in valid_signal_runs(samples, settings):
+        previous_nonzero = None
+        first_zero_timestamp = None
+        last_zero_timestamp = None
+        for _, sample in run.indexed_samples:
+            sign = 0 if abs(sample.value) <= tolerance else (1 if sample.value > 0 else -1)
+            if sign == 0:
+                if previous_nonzero is not None:
+                    first_zero_timestamp = (
+                        sample.timestamp_us
+                        if first_zero_timestamp is None
+                        else first_zero_timestamp
+                    )
+                    last_zero_timestamp = sample.timestamp_us
+                continue
+            if previous_nonzero is not None and sign != previous_nonzero[0]:
+                if first_zero_timestamp is not None:
+                    timestamp = (first_zero_timestamp + last_zero_timestamp) // 2
+                else:
+                    prior_value = previous_nonzero[2]
+                    alpha = abs(prior_value) / (abs(prior_value) + abs(sample.value))
+                    timestamp = round(
+                        previous_nonzero[1] + alpha * (sample.timestamp_us - previous_nonzero[1])
+                    )
+                crossings.append(
+                    ZeroCrossing(
+                        timestamp_us=timestamp,
+                        temporal_segment_id=run.temporal_segment_id,
+                        signal_run_id=run.signal_run_id,
+                        direction=("NEGATIVE_TO_POSITIVE" if sign > 0 else "POSITIVE_TO_NEGATIVE"),
+                    )
                 )
-                direction = "NEGATIVE_TO_POSITIVE" if a < b else "POSITIVE_TO_NEGATIVE"
-            key = (sample.temporal_segment_id, timestamp)
-            if timestamp is not None and key not in seen:
-                crossings.append(ZeroCrossing(timestamp, sample.temporal_segment_id, direction))
-                seen.add(key)
-        previous = sample
+            previous_nonzero = (sign, sample.timestamp_us, sample.value)
+            first_zero_timestamp = last_zero_timestamp = None
     return crossings
 
 
@@ -54,18 +70,24 @@ def segment_turns(
     config: TurnSegmentationConfig,
 ) -> list[TurnSegment]:
     config.validate()
+    runs = {run.signal_run_id: run for run in valid_signal_runs(signal, config)}
     results = []
-    for number, peak in enumerate(peaks, 1):
+    for number, peak in enumerate(
+        sorted(peaks, key=lambda candidate: (candidate.timestamp_us, candidate.sample_index)), 1
+    ):
+        run = runs.get(peak.signal_run_id)
+        if run is None:
+            raise ValueError(f"peak references unknown signal run {peak.signal_run_id}")
         before = [
             crossing
             for crossing in crossings
-            if crossing.temporal_segment_id == peak.temporal_segment_id
+            if crossing.signal_run_id == peak.signal_run_id
             and crossing.timestamp_us < peak.timestamp_us
         ]
         after = [
             crossing
             for crossing in crossings
-            if crossing.temporal_segment_id == peak.temporal_segment_id
+            if crossing.signal_run_id == peak.signal_run_id
             and crossing.timestamp_us > peak.timestamp_us
         ]
         start = before[-1].timestamp_us if before else None
@@ -73,7 +95,7 @@ def segment_turns(
         duration = end - start if start is not None and end is not None else None
         window = [
             sample
-            for sample in signal
+            for _, sample in run.indexed_samples
             if sample.temporal_segment_id == peak.temporal_segment_id
             and (start is None or sample.timestamp_us >= start)
             and (end is None or sample.timestamp_us <= end)
@@ -101,6 +123,7 @@ def segment_turns(
             TurnSegment(
                 f"turn-{number}",
                 peak.temporal_segment_id,
+                peak.signal_run_id,
                 start,
                 peak.timestamp_us,
                 end,

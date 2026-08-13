@@ -22,6 +22,16 @@ class TurnSegmentStatus(StrEnum):
     REJECTED_LOW_COVERAGE = "REJECTED_LOW_COVERAGE"
 
 
+class RealTurnSegmentationStatus(StrEnum):
+    NOT_ANALYZABLE_NO_VALID_TURN_SIGNAL = "NOT_ANALYZABLE_NO_VALID_TURN_SIGNAL"
+    NOT_ANALYZABLE_INSUFFICIENT_CONTINUOUS_TARGET_POSE = (
+        "NOT_ANALYZABLE_INSUFFICIENT_CONTINUOUS_TARGET_POSE"
+    )
+    EXECUTED_NO_QUALIFIED_TURN_CANDIDATES = "EXECUTED_NO_QUALIFIED_TURN_CANDIDATES"
+    EXECUTED_CANDIDATES_REJECTED = "EXECUTED_CANDIDATES_REJECTED"
+    EXECUTED_PROVISIONAL_CANDIDATES = "EXECUTED_PROVISIONAL_CANDIDATES"
+
+
 @dataclass(frozen=True)
 class TurnSegmentationConfig:
     minimum_signal_confidence: float = 0.30
@@ -86,6 +96,7 @@ class TurnSignalSample:
 class PeakCandidate:
     timestamp_us: int
     temporal_segment_id: int
+    signal_run_id: int
     value: float
     prominence: float
     phase_sign: TurnPhaseSign
@@ -101,6 +112,7 @@ class PeakCandidate:
 class ZeroCrossing:
     timestamp_us: int
     temporal_segment_id: int
+    signal_run_id: int
     direction: str
 
     def to_dict(self) -> dict[str, object]:
@@ -111,6 +123,7 @@ class ZeroCrossing:
 class TurnSegment:
     turn_id: str
     temporal_segment_id: int
+    signal_run_id: int
     start_timestamp_us: int | None
     apex_timestamp_us: int
     end_timestamp_us: int | None

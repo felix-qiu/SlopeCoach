@@ -219,13 +219,17 @@ def stabilize_target_pose_stream(
 
 def temporal_stability_metrics(
     samples: list[StabilizedPoseSample],
-) -> dict[str, float | int | None]:
+) -> dict[str, object]:
+    segment_ids = {
+        sample.temporal_segment_id for sample in samples if sample.temporal_segment_id is not None
+    }
+    segment_scales = segment_body_scales(samples)
     raw_steps, stable_steps, raw_second, stable_second = [], [], [], []
     histories: dict[tuple[int, Joint], list[tuple[float, float, float, float]]] = defaultdict(list)
     for sample in samples:
         if sample.temporal_segment_id is None:
             continue
-        body_scale = _body_scale(sample)
+        body_scale = segment_scales.get(sample.temporal_segment_id)
         if body_scale is None:
             continue
         for joint, point in sample.joints.items():
@@ -258,6 +262,9 @@ def temporal_stability_metrics(
                     math.hypot(values[2] - 2 * b[2] + a[2], values[3] - 2 * b[3] + a[3])
                 )
     return {
+        "normalization_strategy": ("SEGMENT_MEDIAN_RAW_SHOULDER_CENTER_TO_ANKLE_CENTER"),
+        "body_scale_valid_segment_count": len(segment_scales),
+        "body_scale_unavailable_segment_count": len(segment_ids) - len(segment_scales),
         "raw_joint_step_median": median(raw_steps) if raw_steps else None,
         "stabilized_joint_step_median": median(stable_steps) if stable_steps else None,
         "raw_second_difference_median": median(raw_second) if raw_second else None,
@@ -267,20 +274,47 @@ def temporal_stability_metrics(
     }
 
 
-def _body_scale(sample: StabilizedPoseSample) -> float | None:
-    left = sample.joint(Joint.LEFT_SHOULDER)
-    right = sample.joint(Joint.RIGHT_ANKLE)
-    if (
-        not left
-        or not right
-        or None
-        in (
-            left.raw_x_px,
-            left.raw_y_px,
-            right.raw_x_px,
-            right.raw_y_px,
-        )
+def symmetric_frame_body_scale(sample: StabilizedPoseSample) -> float | None:
+    points = [
+        sample.joint(Joint.LEFT_SHOULDER),
+        sample.joint(Joint.RIGHT_SHOULDER),
+        sample.joint(Joint.LEFT_ANKLE),
+        sample.joint(Joint.RIGHT_ANKLE),
+    ]
+    if any(
+        point is None or point.provenance is not TemporalProvenance.OBSERVED for point in points
     ):
         return None
-    scale = math.hypot(right.raw_x_px - left.raw_x_px, right.raw_y_px - left.raw_y_px)
+    coordinates = [(point.raw_x_px, point.raw_y_px) for point in points]
+    if any(
+        x is None or y is None or not math.isfinite(x) or not math.isfinite(y)
+        for x, y in coordinates
+    ):
+        return None
+    left_shoulder, right_shoulder, left_ankle, right_ankle = coordinates
+    shoulder_center = (
+        (left_shoulder[0] + right_shoulder[0]) / 2,
+        (left_shoulder[1] + right_shoulder[1]) / 2,
+    )
+    ankle_center = (
+        (left_ankle[0] + right_ankle[0]) / 2,
+        (left_ankle[1] + right_ankle[1]) / 2,
+    )
+    scale = math.hypot(ankle_center[0] - shoulder_center[0], ankle_center[1] - shoulder_center[1])
     return scale if math.isfinite(scale) and scale > 1e-9 else None
+
+
+def segment_body_scales(samples: list[StabilizedPoseSample]) -> dict[int, float]:
+    """Return one constant median raw symmetric scale per temporal segment."""
+    scale_candidates: dict[int, list[float]] = defaultdict(list)
+    for sample in samples:
+        if sample.temporal_segment_id is None:
+            continue
+        scale = symmetric_frame_body_scale(sample)
+        if scale is not None:
+            scale_candidates[sample.temporal_segment_id].append(scale)
+    return {
+        segment_id: median(candidates)
+        for segment_id, candidates in scale_candidates.items()
+        if candidates
+    }

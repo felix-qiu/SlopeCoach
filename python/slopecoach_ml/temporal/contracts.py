@@ -153,7 +153,7 @@ class TemporalPoseRun:
     long_gap_unfilled_count: int
     interpolation_seconds: float = 0.0
     stabilization_seconds: float = 0.0
-    stability: dict[str, float | int | None] = field(default_factory=dict)
+    stability: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {

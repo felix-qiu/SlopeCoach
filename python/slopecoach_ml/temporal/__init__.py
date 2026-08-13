@@ -12,7 +12,12 @@ from .contracts import (
 from .golden import run_temporal_golden, run_turn_golden
 from .interpolation import JointSupport, interpolate_segment
 from .one_euro import LowPassFilter, OneEuroFilter1D
-from .stabilizer import stabilize_target_pose_stream, temporal_stability_metrics
+from .stabilizer import (
+    segment_body_scales,
+    stabilize_target_pose_stream,
+    symmetric_frame_body_scale,
+    temporal_stability_metrics,
+)
 
 __all__ = [
     "JointSupport",
@@ -28,6 +33,8 @@ __all__ = [
     "interpolate_segment",
     "run_temporal_golden",
     "run_turn_golden",
+    "segment_body_scales",
     "stabilize_target_pose_stream",
+    "symmetric_frame_body_scale",
     "temporal_stability_metrics",
 ]

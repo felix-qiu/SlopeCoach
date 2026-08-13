@@ -92,7 +92,11 @@ def run_turn_golden(path: str | Path) -> dict[str, object]:
     samples = [TurnSignalSample(**item) for item in data["samples"]]
     config = TurnSegmentationConfig(**data["config"])
     peaks = ReferencePeakDetector().detect(samples, config)
-    crossings = detect_zero_crossings(samples, config.zero_crossing_tolerance)
+    crossings = detect_zero_crossings(
+        samples,
+        config.zero_crossing_tolerance,
+        minimum_signal_confidence=config.minimum_signal_confidence,
+    )
     segments = segment_turns(samples, peaks, crossings, config)
     expected = data["expected"]
     tolerance = expected["apex_timestamp_tolerance_us"]

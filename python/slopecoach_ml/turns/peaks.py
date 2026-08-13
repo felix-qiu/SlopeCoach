@@ -8,31 +8,7 @@ from .contracts import (
     TurnSegmentationConfig,
     TurnSignalSample,
 )
-
-
-def _valid_segments(samples: list[TurnSignalSample], config: TurnSegmentationConfig):
-    current = []
-    current_segment = None
-    for index, sample in enumerate(samples):
-        valid = (
-            sample.temporal_segment_id is not None
-            and sample.value is not None
-            and sample.support_confidence is not None
-            and sample.support_confidence >= config.minimum_signal_confidence
-        )
-        if not valid or (
-            current_segment is not None and sample.temporal_segment_id != current_segment
-        ):
-            if current:
-                yield current
-            current = []
-        if valid:
-            current_segment = sample.temporal_segment_id
-            current.append((index, sample))
-        else:
-            current_segment = None
-    if current:
-        yield current
+from .runs import valid_signal_runs
 
 
 class ReferencePeakDetector:
@@ -40,8 +16,10 @@ class ReferencePeakDetector:
         self, samples: list[TurnSignalSample], config: TurnSegmentationConfig
     ) -> list[PeakCandidate]:
         config.validate()
-        candidates = []
-        for segment in _valid_segments(samples, config):
+        accepted = []
+        for run in valid_signal_runs(samples, config):
+            raw_candidates = []
+            segment = run.indexed_samples
             position = 1
             while position < len(segment) - 1:
                 plateau_end = position
@@ -65,34 +43,41 @@ class ReferencePeakDetector:
                 ):
                     position = plateau_end + 1
                     continue
-                candidates.append(
+                raw_candidates.append(
                     PeakCandidate(
-                        item.timestamp_us,
-                        item.temporal_segment_id,
-                        item.value,
-                        prominence,
-                        TurnPhaseSign.POSITIVE_PHASE if positive else TurnPhaseSign.NEGATIVE_PHASE,
-                        index,
+                        timestamp_us=item.timestamp_us,
+                        temporal_segment_id=item.temporal_segment_id,
+                        signal_run_id=run.signal_run_id,
+                        value=item.value,
+                        prominence=prominence,
+                        phase_sign=(
+                            TurnPhaseSign.POSITIVE_PHASE
+                            if positive
+                            else TurnPhaseSign.NEGATIVE_PHASE
+                        ),
+                        sample_index=index,
                     )
                 )
                 position = plateau_end + 1
-        accepted = []
-        for candidate in candidates:
-            if (
-                accepted
-                and candidate.temporal_segment_id == accepted[-1].temporal_segment_id
-                and candidate.timestamp_us - accepted[-1].timestamp_us
-                < config.minimum_peak_separation_us
-            ):
-                if abs(candidate.value) > abs(accepted[-1].value):
-                    accepted[-1] = candidate
-                continue
-            if accepted and candidate.phase_sign is accepted[-1].phase_sign:
-                if abs(candidate.value) > abs(accepted[-1].value):
-                    accepted[-1] = candidate
-                continue
-            accepted.append(candidate)
-        return accepted
+            accepted_for_run = []
+            for candidate in raw_candidates:
+                if (
+                    accepted_for_run
+                    and candidate.timestamp_us - accepted_for_run[-1].timestamp_us
+                    < config.minimum_peak_separation_us
+                ):
+                    if abs(candidate.value) > abs(accepted_for_run[-1].value):
+                        accepted_for_run[-1] = candidate
+                    continue
+                if accepted_for_run and candidate.phase_sign is accepted_for_run[-1].phase_sign:
+                    if abs(candidate.value) > abs(accepted_for_run[-1].value):
+                        accepted_for_run[-1] = candidate
+                    continue
+                accepted_for_run.append(candidate)
+            accepted.extend(accepted_for_run)
+        return sorted(
+            accepted, key=lambda candidate: (candidate.timestamp_us, candidate.sample_index)
+        )
 
 
 class SciPyFindPeaksDetector:

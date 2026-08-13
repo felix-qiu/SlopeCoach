@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A4: Temporal Pose + Turn Foundation**. The code in
+SlopeCoach is currently in **Phase A4.1: Turn Signal & Segmentation Hardening**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -157,6 +157,25 @@ does not pick `persons[0]`, the largest box, or a manual target. Target Identity
 deferred and the existing template remains `UNLABELED`; identity accuracy is unknown. Turn GT is
 also unavailable, so precision/recall/F1 remain JSON `null`. This blocks product validation, not
 deterministic temporal engineering work.
+
+A4.1 makes both extrema generation and acceptance local to a `ValidSignalRun`: a maximal,
+strictly timestamp-increasing sequence with one temporal segment, finite signal values, and
+sufficient confidence. Missing/low-confidence values and segment changes are hard boundaries;
+later runs are never merged even if they reuse the same temporal segment ID. Peak separation,
+same-sign replacement, zero crossings, and segment boundaries therefore cannot suppress or bridge
+across a signal gap. Exact/near-zero plateaus emit one crossing only when they connect opposite
+known signs; its timestamp is the integer midpoint between the first and last zero timestamps.
+
+New artifacts use `ski-bench-temporal-turns-v2`. They report signal sufficiency separately from
+qualified extrema, so a continuous flat/low-amplitude signal is
+`EXECUTED_NO_QUALIFIED_TURN_CANDIDATES`, not automatically insufficient pose evidence. The default
+backend remains dependency-free `ReferencePeakDetector`; `SCIPY_USAGE = NOT_USED`.
+
+V2 stability metrics estimate each frame's raw symmetric shoulder-center to ankle-center distance,
+take its median per temporal segment, and use that single segment scale for both raw and stabilized
+differences. Segments without a truthful scale are excluded and counted. These normalization
+semantics differ from v1's historical asymmetric per-frame denominator, so v1 and v2 stability
+numbers are not directly comparable and old v1 artifacts must not be rewritten.
 
 ## Real ski-video benchmark and artifacts
 
@@ -350,8 +369,8 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A2.2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
-the production Rust Domain Kernel, tracking/Target Identity/ReID, temporal smoothing, turn/diagnosis
-pipelines, LLMs, QNN, TensorRT, physical 3D edge angle, live camera coaching, complex UI, or
-first-party C++. Mobile integration and the Rust production implementation are explicitly
+Not implemented in Phase A4.1: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+the production Rust Domain Kernel, ByteTrack/deep ReID, identity or turn GT labeling, diagnosis,
+scoring, drills, 3D/physical edge angle, LLMs, QNN, TensorRT, live camera coaching, complex UI, or
+first-party C++. Mobile integration and the Rust production implementation remain explicitly
 deferred.
