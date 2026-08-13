@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from slopecoach_ml.benchmark.real_dataset import (
+    BiomechanicsDatasetValidationConfig,
     RealDatasetClip,
     RealDatasetManifest,
     aggregate_biomechanics_dataset,
@@ -184,6 +185,54 @@ def record(current, payload):
 )
 def test_dataset_evidence_levels(count, expected):
     assert real_data_validation_status(count) == expected
+
+
+@pytest.mark.parametrize(
+    "threshold,count,expected",
+    [
+        (10, 5, "LIMITED_MULTICLIP_EVIDENCE"),
+        (10, 9, "LIMITED_MULTICLIP_EVIDENCE"),
+        (10, 10, "MULTICLIP_ENGINEERING_EVIDENCE"),
+        (2, 1, "INSUFFICIENT_DATASET_SINGLE_CLIP"),
+        (2, 2, "MULTICLIP_ENGINEERING_EVIDENCE"),
+    ],
+)
+def test_dataset_evidence_level_uses_configured_threshold(threshold, count, expected):
+    config = BiomechanicsDatasetValidationConfig(
+        minimum_multiclip_source_videos=threshold
+    )
+    assert real_data_validation_status(count, config) == expected
+
+
+@pytest.mark.parametrize("threshold", [0, 1, True, 2.0, "5"])
+def test_multiclip_threshold_requires_integer_at_least_two(threshold):
+    with pytest.raises(ValueError):
+        BiomechanicsDatasetValidationConfig(
+            minimum_multiclip_source_videos=threshold
+        ).validate()
+
+
+def test_aggregator_forwards_validation_config_threshold():
+    clips = [clip(f"clip-{index}", f"video-{index}") for index in range(5)]
+    records = [record(item, report()) for item in clips]
+    limited = aggregate_biomechanics_dataset(
+        manifest(clips),
+        records,
+        BiomechanicsDatasetValidationConfig(minimum_multiclip_source_videos=10),
+    )
+    assert (
+        limited["validation"]["A5_2_REAL_DATA_VALIDATION"]
+        == "LIMITED_MULTICLIP_EVIDENCE"
+    )
+    default = aggregate_biomechanics_dataset(
+        manifest(clips),
+        records,
+        BiomechanicsDatasetValidationConfig(minimum_multiclip_source_videos=5),
+    )
+    assert (
+        default["validation"]["A5_2_REAL_DATA_VALIDATION"]
+        == "MULTICLIP_ENGINEERING_EVIDENCE"
+    )
 
 
 def test_independent_sources_and_duplicate_subclips_do_not_inflate_status():

@@ -120,8 +120,9 @@ The sequential `benchmark-biomechanics-dataset` command preserves each complete 
 isolates clip failures, and writes macro/micro frame coverage, segment-based temporal coverage,
 turn-based coverage, failure matrices, mathematical domain checks, CSV matrices, performance, and
 strict-null GT status. A single real source honestly reports
-`INSUFFICIENT_DATASET_SINGLE_CLIP`; 2–4 sources report `LIMITED_MULTICLIP_EVIDENCE`; five or more
-report project-level `MULTICLIP_ENGINEERING_EVIDENCE`. These levels are engineering governance,
+`INSUFFICIENT_DATASET_SINGLE_CLIP`; with the default threshold of five, 2–4 sources report
+`LIMITED_MULTICLIP_EVIDENCE` and five or more report project-level
+`MULTICLIP_ENGINEERING_EVIDENCE`. The threshold is config-driven. These levels are engineering governance,
 not statistical generalization or accuracy evidence. No diagnosis, score, feature tuning, or
 automatic schema deletion occurs.
 

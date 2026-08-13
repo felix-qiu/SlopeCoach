@@ -236,8 +236,9 @@ make benchmark-biomechanics-dataset \
 ```
 
 Enabled clips execute sequentially. Per-clip failures remain explicit instead of being silently
-discarded. Five independent videos is a project engineering-evidence threshold, not statistical
-proof; ten or more varied clips are preferred before feature-retention research decisions.
+discarded. The default threshold is five independent source videos; it is a configurable project
+engineering-evidence threshold, not statistical proof. Ten or more varied clips are preferred
+before feature-retention research decisions.
 `HIGH_FEATURE_COVERAGE_DOES_NOT_IMPLY_ACCURACY`: coverage cannot validate physical correctness,
 biomechanics accuracy, diagnosis, or coaching. The ML feature vector remains `NOT_FROZEN`, and no
 feature is automatically deleted.

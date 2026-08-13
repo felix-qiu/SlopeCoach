@@ -39,9 +39,9 @@ class BiomechanicsDatasetValidationConfig:
         if (
             isinstance(self.minimum_multiclip_source_videos, bool)
             or not isinstance(self.minimum_multiclip_source_videos, int)
-            or self.minimum_multiclip_source_videos < 1
+            or self.minimum_multiclip_source_videos < 2
         ):
-            raise ValueError("minimum_multiclip_source_videos must be positive")
+            raise ValueError("minimum_multiclip_source_videos must be an integer >= 2")
         for name in (
             "minimum_clip_feature_coverage_for_available",
             "robust_clip_support_ratio",
@@ -252,12 +252,17 @@ def prepare_real_dataset_manifest(
     return manifest.to_dict()
 
 
-def real_data_validation_status(independent_source_video_count: int) -> str:
+def real_data_validation_status(
+    independent_source_video_count: int,
+    config: BiomechanicsDatasetValidationConfig | None = None,
+) -> str:
+    settings = config or BiomechanicsDatasetValidationConfig()
+    settings.validate()
     if independent_source_video_count == 0:
         return "NOT_ANALYZABLE_NO_REAL_CLIPS"
     if independent_source_video_count == 1:
         return "INSUFFICIENT_DATASET_SINGLE_CLIP"
-    if independent_source_video_count < 5:
+    if independent_source_video_count < settings.minimum_multiclip_source_videos:
         return "LIMITED_MULTICLIP_EVIDENCE"
     return "MULTICLIP_ENGINEERING_EVIDENCE"
 
@@ -653,7 +658,7 @@ def aggregate_biomechanics_dataset(
         },
         "validation": {
             "A5_2_ENGINEERING_VALIDATION": "PASS",
-            "A5_2_REAL_DATA_VALIDATION": real_data_validation_status(independent_sources),
+            "A5_2_REAL_DATA_VALIDATION": real_data_validation_status(independent_sources, settings),
             "A5_PRODUCT_VALIDATION": "BLOCKED_BY_GT",
         },
         "limitations": [
@@ -661,7 +666,7 @@ def aggregate_biomechanics_dataset(
             "ENGINEERING_EVIDENCE_AVAILABILITY_NOT_BIOMECHANICS_ACCURACY",
             "NO_IDENTITY_TURN_OR_BIOMECHANICS_GROUND_TRUTH",
             "IMAGE_SPACE_2D_CAMERA_DEPENDENT",
-            "MINIMUM_FIVE_SOURCE_VIDEOS_IS_PROJECT_GOVERNANCE_NOT_STATISTICAL_PROOF",
+            "MINIMUM_SOURCE_VIDEO_THRESHOLD_IS_PROJECT_GOVERNANCE_NOT_STATISTICAL_PROOF",
             "PYTHON_RESEARCH_REFERENCE_ONLY",
             "NO_DIAGNOSIS_OR_SCORE",
         ],
