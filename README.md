@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A2.2: Real Ski Video Pose Validation**. The code in
+SlopeCoach is currently in **Phase A3: Target Identity Research Reference**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -156,6 +156,39 @@ Target Identity is not implemented. Zero persons yields no target feature; exact
 use the single-person reference path; more than one person yields `null` target biomechanics and
 `MULTIPLE_PERSONS_TARGET_IDENTITY_UNRESOLVED`. Detection ordering, bbox size/position, and
 confidence are never treated as Target Identity. Track ID is not Target Identity.
+
+Phase A3 adds a separate, provisional identity-aware research path without changing the A2.2
+raw benchmark. Candidate quality conservatively rejects invalid, nearly invisible, implausibly
+small, or malformed boxes; it is not target selection and is not an accuracy claim. A
+deterministic `REFERENCE_MOTION_IOU` tracker builds ephemeral tracks, while `TargetIdentity`
+remains a separate object that can recover onto a different Track ID.
+
+The auto selector evaluates a timestamp-based initialization window using relative foreground
+area, center proximity, persistence, motion, detector confidence, and candidate quality. Missing
+pose or appearance evidence remains `null` and weights are renormalized. Close winners produce
+`AMBIGUOUS`, never a track-ID or detection-order tie break. Identity states are `UNINITIALIZED`,
+`LOCKED`, `SUSPECT`, `LOST`, `RECOVERING`, and `AMBIGUOUS`; only a sufficiently confident
+`LOCKED` target may produce reference biomechanics.
+
+The default appearance descriptor is a bounded HSV histogram with safely clipped crops. It is
+lightweight research evidence, not deep ReID (`DEEP_REID_STATUS = NOT_CONFIGURED`). Pose
+scheduling is bounded: initialization/ambiguity may probe at most two candidates, a locked frame
+poses only the active target, and uncertain states suppress target biomechanics. Manual user
+target correction remains architecturally possible but deferred.
+
+All A3 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
+`RESEARCH_DEFAULTS_A3`; they are conservative provisional defaults, not scientifically optimal
+values. The identity benchmark reports candidate reduction without calling it precision, and
+keeps `TARGET_IDENTITY_GT_STATUS = NOT_AVAILABLE`, `wrong_target_rate = null`, and
+`target_frame_accuracy = null` until genuine frame-level annotations exist.
+
+```bash
+make benchmark-target-identity \
+  VIDEO=benchmarks/ski_bench/videos/example.mp4 \
+  SAMPLE_FPS=2 \
+  OUTPUT=artifacts/benchmarks/a3/example.json \
+  DEBUG_DIR=artifacts/debug/a3_target_identity/example
+```
 
 The provisional `ReferenceAnalysisConfig` centrally defines the joint confidence and square-pixel
 tolerance. Callers explicitly provide analysis/provider/model provenance, preventing future real

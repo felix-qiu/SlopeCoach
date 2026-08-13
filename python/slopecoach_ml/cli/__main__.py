@@ -10,8 +10,10 @@ from typing import Any
 
 from slopecoach_ml.benchmark import (
     RealPoseDebugCollector,
+    TargetIdentityDebugCollector,
     benchmark_golden,
     benchmark_real_pose_frames,
+    benchmark_target_identity_frames,
     benchmark_video,
 )
 from slopecoach_ml.detection.mmdet_provider import (
@@ -79,6 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
     real_video.add_argument("--debug-dir")
     real_video.add_argument("--max-debug-frames", type=int, default=10)
     real_video.add_argument("--input-non-mirrored", action="store_true")
+    target_identity = subparsers.add_parser(
+        "benchmark-target-identity", help="run A3 target-identity video benchmark"
+    )
+    target_identity.add_argument("video")
+    target_identity.add_argument("--sample-fps", type=float, default=2.0)
+    target_identity.add_argument("--output")
+    target_identity.add_argument("--debug-dir")
+    target_identity.add_argument("--max-debug-frames", type=int, default=12)
+    target_identity.add_argument("--input-non-mirrored", action="store_true")
     return parser
 
 
@@ -209,13 +220,14 @@ def main(argv: list[str] | None = None) -> int:
         }
         _write_json(payload, args.output)
         return 0
-    if args.command == "benchmark-real-pose":
+    if args.command in {"benchmark-real-pose", "benchmark-target-identity"}:
         if not args.input_non_mirrored:
             raise RuntimeError(
                 "MIRROR_STATE_UNRESOLVED: pass --input-non-mirrored to attest input state"
             )
-        if args.max_debug_frames < 0 or args.max_debug_frames > 10:
-            raise ValueError("max-debug-frames must be in [0, 10]")
+        maximum_debug = 10 if args.command == "benchmark-real-pose" else 12
+        if args.max_debug_frames < 0 or args.max_debug_frames > maximum_debug:
+            raise ValueError(f"max-debug-frames must be in [0, {maximum_debug}]")
         detector, pose_provider, device, model_load = _real_providers()
         registry = load_model_registry(_root() / "models/registry.json")
         sampler = OpenCVVideoSampler(args.video, sample_fps=args.sample_fps)
@@ -239,6 +251,32 @@ def main(argv: list[str] | None = None) -> int:
                 frame_index=warmup.frame_index,
             )
             warmup_frames = 1
+        if args.command == "benchmark-target-identity":
+            debug_collector = TargetIdentityDebugCollector() if args.debug_dir else None
+            report = benchmark_target_identity_frames(
+                input_path=args.video,
+                frames=OpenCVVideoSampler(args.video, sample_fps=args.sample_fps),
+                detector=detector,
+                pose_provider=pose_provider,
+                detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
+                pose_model=registry["rtmw-l-cocktail14-256x192"].to_dict(),
+                device=device,
+                sample_fps=args.sample_fps,
+                model_load=model_load,
+                warmup_frames=warmup_frames,
+                frame_observer=debug_collector.observe if debug_collector else None,
+            )
+            report["debug_artifacts"] = (
+                debug_collector.write(
+                    args.debug_dir,
+                    report["frame_observations"],
+                    max_frames=args.max_debug_frames,
+                )
+                if debug_collector
+                else {"selected_frame_indices": [], "overlay_paths": [], "contact_sheet": None}
+            )
+            _write_json(report, args.output)
+            return 0
         debug_collector = RealPoseDebugCollector() if args.debug_dir else None
         report = benchmark_real_pose_frames(
             input_path=args.video,

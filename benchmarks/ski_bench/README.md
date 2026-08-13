@@ -19,3 +19,11 @@ not tracks, and multi-person frames remain unresolved instead of choosing a targ
 `SYNTHETIC_PIPELINE_SMOKE`. Debug overlays and contact sheets use canonical SourcePixel2D poses
 and belong in `artifacts/debug/<analysis-id>/`. Raw temporal observations apply no smoothing;
 knee angles remain 2D image measurements, not physical 3D or diagnosis.
+
+Phase A3 adds the separate `benchmark-target-identity` comparison path. It preserves raw
+detections, applies conservative candidate quality, builds ephemeral reference tracks, and
+maintains a distinct TargetIdentity state machine. Track IDs are not user identity. Ambiguous,
+suspect, recovering, and lost frames suppress target biomechanics. The lightweight HSV
+appearance descriptor is not deep ReID, and target-identity accuracy metrics remain `null`
+without formal frame annotations. A3 artifacts belong under ignored `artifacts/`; local videos
+remain ignored and are never CI inputs.
