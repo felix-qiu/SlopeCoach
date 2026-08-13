@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -27,6 +28,9 @@ class MMPoseRTMWPoseProvider:
 
     def __init__(self, backend: MMPoseBackend) -> None:
         self._backend = backend
+        self.last_backend_seconds = 0.0
+        self.last_adapter_seconds = 0.0
+        self.last_raw_joint_count: int | None = None
 
     def estimate_detections(
         self,
@@ -49,9 +53,13 @@ class MMPoseRTMWPoseProvider:
             )
             for detection in detections
         ]
+        started = time.perf_counter()
         predictions = self._backend.infer(image, boxes) if boxes else ()
+        self.last_backend_seconds = time.perf_counter() - started
         if len(predictions) != len(detections):
             raise RuntimeError("POSE_INFERENCE_FAILED: prediction/detection count mismatch")
+        self.last_raw_joint_count = len(predictions[0][0]) if predictions else None
+        started = time.perf_counter()
         persons = tuple(
             PersonPose2D(
                 detection_id=detection.detection_id,
@@ -61,6 +69,7 @@ class MMPoseRTMWPoseProvider:
             )
             for detection, (coordinates, scores) in zip(detections, predictions, strict=True)
         )
+        self.last_adapter_seconds = time.perf_counter() - started
         frame = PoseFrame(
             contract_version="python-reference-pose-v1",
             timestamp_us=timestamp_us,
@@ -75,6 +84,7 @@ class MMPoseRTMWPoseProvider:
 
 class OpenMMLabMMPoseBackend:
     def __init__(self, config_path: str, checkpoint_path: str, *, device: str = "cpu") -> None:
+        self.device = device
         try:
             from mmpose.apis import inference_topdown, init_model
         except ImportError as error:

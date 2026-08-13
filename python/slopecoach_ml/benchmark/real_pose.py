@@ -30,6 +30,7 @@ def benchmark_real_pose_frames(
     pose_provider: MMPoseRTMWPoseProvider,
     detector_model: dict[str, Any],
     pose_model: dict[str, Any],
+    device: str = "cpu",
     config: ReferenceAnalysisConfig | None = None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
@@ -96,6 +97,7 @@ def benchmark_real_pose_frames(
         "benchmark_contract_version": "ski-bench-real-pose-v1",
         "input_kind": input_kind,
         "input_path": str(input_path),
+        "device": device,
         "video_metadata": inspect_video(input_path).to_dict(),
         "detector": {
             **detector_model,

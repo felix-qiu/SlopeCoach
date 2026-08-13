@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A2: Real RTMW Pose Provider + Pose Benchmark**. The code in
+SlopeCoach is currently in **Phase A2.1: Apple Silicon Real Pose Runtime**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -163,10 +163,22 @@ uv pip install --python artifacts/openmmlab-venv/bin/python \
 ```
 
 On Apple Silicon, MMCV 2.1.0 needs a source build with compiled ops after PyTorch is present.
-The current machine installed all pinned distributions, but `mmcv._ext` was not produced and
-official `mmdet.apis` therefore cannot load. `OPENMMLAB_RUNTIME_STATUS = BLOCKED` until an
-officially compatible build provides those ops; no third-party version checks or source files
-are patched to bypass this.
+The validated macOS bootstrap checks out the official v2.1.0 tag under ignored artifacts, builds
+with `MMCV_WITH_OPS=1`, and verifies both `mmcv._ext` and `mmcv.ops.nms`. Xcode 26 / Clang 21
+requires `-Wno-invalid-specialization` for the pinned PyTorch 2.1.2 headers; this is a compiler
+diagnostic compatibility flag and does not patch third-party source. Reproduce the runtime with:
+
+```bash
+make openmmlab-macos
+```
+
+The bootstrap never downloads checkpoints. It modifies only the ignored isolated environment and
+official source checkout under `artifacts/`; it does not use sudo or modify system Python.
+
+The local reference runtime has passed real CPU inference with the exact registered RTMDet-m and
+RTMW-L checkpoints: `REAL_POSE_MODEL_STATUS = READY_CPU`. This is research/reference validation,
+not a production runtime claim. MPS hardware is available but full model inference remains
+`MPS_STATUS = NOT_TESTED` because CPU is the reproducible P0 baseline.
 
 The configured detector is official RTMDet-m 640 COCO/Objects365 person detection; pose is
 official RTMW-L Cocktail14 256x192 (`20231122`). Exact sources and nullable, post-download SHA256
@@ -186,6 +198,8 @@ These Make targets explicitly attest that input media is non-mirrored. Direct CL
 The real commands require explicit `SLOPECOACH_DETECTOR_CONFIG`,
 `SLOPECOACH_DETECTOR_CHECKPOINT`, `SLOPECOACH_POSE_CONFIG`, and
 `SLOPECOACH_POSE_CHECKPOINT` paths. Help and package imports never download weights.
+Real providers default explicitly to `SLOPECOACH_DEVICE=cpu`. `mps` may be requested, but there is
+no silent fallback; hardware availability alone is not treated as validated OpenMMLab support.
 
 RTMW uses the official COCO-WholeBody 133-keypoint metainfo. A single named mapping converts body
 identities 0–16 to `COCO17_V1`, with tested left/right semantics. Official MMPose top-down

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,10 @@ class ModelMetadata:
         ):
             if not isinstance(getattr(model, name), str) or not getattr(model, name):
                 raise ValueError(f"{name} must be a non-empty string")
+        if model.checkpoint_sha256 is not None and not re.fullmatch(
+            r"[0-9a-f]{64}", model.checkpoint_sha256
+        ):
+            raise ValueError("checkpoint_sha256 must be null or a lowercase SHA256 digest")
         return model
 
     def to_dict(self) -> dict[str, Any]:

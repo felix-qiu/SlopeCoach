@@ -50,6 +50,7 @@ class OpenMMLabMMDetBackend:
     """Adapter over official MMDetection APIs; imports only when explicitly configured."""
 
     def __init__(self, config_path: str, checkpoint_path: str, *, device: str = "cpu") -> None:
+        self.device = device
         try:
             from mmdet.apis import inference_detector, init_detector
         except ImportError as error:
@@ -62,12 +63,17 @@ class OpenMMLabMMDetBackend:
 
     def infer(self, image: object) -> Sequence[tuple[float, float, float, float, float, int]]:
         try:
+            # MMPose initialization changes MMEngine's process-global scope. MMDetection's
+            # inference API does not restore its own scope before composing the test pipeline.
+            from mmengine.registry import init_default_scope
+
+            init_default_scope("mmdet")
             instances = self._infer(self._model, image).pred_instances.cpu()
             boxes = instances.bboxes.numpy().tolist()
             scores = instances.scores.numpy().tolist()
             labels = instances.labels.numpy().tolist()
         except Exception as error:
-            raise RuntimeError(f"POSE_INFERENCE_FAILED: detector: {error}") from error
+            raise RuntimeError(f"DETECTOR_INFERENCE_FAILED: detector: {error}") from error
         return [
             (*box, score, label) for box, score, label in zip(boxes, scores, labels, strict=True)
         ]

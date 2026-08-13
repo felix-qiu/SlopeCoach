@@ -14,7 +14,7 @@ from slopecoach_ml.detection.mmdet_provider import (
     OpenMMLabMMDetBackend,
 )
 from slopecoach_ml.models import load_model_registry
-from slopecoach_ml.openmmlab import openmmlab_preflight
+from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
 from slopecoach_ml.pose import render_debug_overlay
 from slopecoach_ml.pose.mmpose_provider import MMPoseRTMWPoseProvider, OpenMMLabMMPoseBackend
 from slopecoach_ml.quality import VideoQualityGate, VideoQualityStatus
@@ -76,22 +76,48 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _real_providers():
+    device = configured_device()
     required = {
         "detector_config": os.getenv("SLOPECOACH_DETECTOR_CONFIG"),
         "detector_checkpoint": os.getenv("SLOPECOACH_DETECTOR_CHECKPOINT"),
         "pose_config": os.getenv("SLOPECOACH_POSE_CONFIG"),
         "pose_checkpoint": os.getenv("SLOPECOACH_POSE_CHECKPOINT"),
     }
-    missing = [name for name, value in required.items() if not value or not Path(value).is_file()]
-    if missing:
-        raise RuntimeError(f"MODEL_CHECKPOINT_MISSING: {', '.join(missing)}")
+    missing_configs = [
+        name
+        for name in ("detector_config", "pose_config")
+        if not required[name] or not Path(required[name]).is_file()
+    ]
+    missing_checkpoints = [
+        name
+        for name in ("detector_checkpoint", "pose_checkpoint")
+        if not required[name] or not Path(required[name]).is_file()
+    ]
+    if missing_configs:
+        raise RuntimeError(f"MODEL_CONFIG_MISSING: {', '.join(missing_configs)}")
+    if missing_checkpoints:
+        raise RuntimeError(f"MODEL_CHECKPOINT_MISSING: {', '.join(missing_checkpoints)}")
+    started = time.perf_counter()
     detector = MMDetPersonDetectorProvider(
-        OpenMMLabMMDetBackend(required["detector_config"], required["detector_checkpoint"])
+        OpenMMLabMMDetBackend(
+            required["detector_config"], required["detector_checkpoint"], device=device
+        )
     )
+    detector_load_seconds = time.perf_counter() - started
+    started = time.perf_counter()
     pose = MMPoseRTMWPoseProvider(
-        OpenMMLabMMPoseBackend(required["pose_config"], required["pose_checkpoint"])
+        OpenMMLabMMPoseBackend(required["pose_config"], required["pose_checkpoint"], device=device)
     )
-    return detector, pose
+    pose_load_seconds = time.perf_counter() - started
+    return (
+        detector,
+        pose,
+        device,
+        {
+            "detector_seconds": detector_load_seconds,
+            "pose_seconds": pose_load_seconds,
+        },
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -112,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         image = cv2.imread(args.image)
         if image is None:
             raise ValueError("IMAGE_DECODE_FAILED")
-        detector, pose_provider = _real_providers()
+        detector, pose_provider, device, model_load = _real_providers()
         height, width = image.shape[:2]
         from slopecoach_ml.pose import FrameGeometry
 
@@ -135,14 +161,29 @@ def main(argv: list[str] | None = None) -> int:
             config=ReferenceAnalysisConfig(),
         )
         biomechanics_seconds = time.perf_counter() - stage
+        overlay_seconds = None
+        if args.overlay:
+            stage = time.perf_counter()
+            render_debug_overlay(image, frame, args.overlay, provider_name=pose_provider.name)
+            overlay_seconds = time.perf_counter() - stage
+        registry = load_model_registry(_root() / "models/registry.json")
+        detector_model = registry["rtmdet-m-640-coco-obj365-person"]
+        pose_model = registry["rtmw-l-cocktail14-256x192"]
         payload = {
             "input": args.image,
             "provider": pose_provider.name,
             "detector": detector.name,
             "pose_model": "rtmw-l-cocktail14-256x192@20231122",
-            "device": "cpu",
+            "detector_checkpoint_sha256": detector_model.checkpoint_sha256,
+            "pose_checkpoint_sha256": pose_model.checkpoint_sha256,
+            "device": device,
+            "model_load": model_load,
             "frame_geometry": geometry.to_dict(),
             "person_count": len(frame.persons),
+            "raw_output_joint_count": pose_provider.last_raw_joint_count,
+            "canonical_output_joint_count": len(frame.persons[0].keypoints)
+            if frame.persons
+            else None,
             "persons": [person.to_dict() for person in frame.persons],
             "canonical_joint_schema": frame.joint_schema,
             "reference_analysis": result.to_dict(),
@@ -151,12 +192,14 @@ def main(argv: list[str] | None = None) -> int:
             "timing": {
                 "total_processing_seconds": time.perf_counter() - started,
                 "detector_seconds": detector_seconds,
-                "pose_seconds": pose_seconds,
+                "pose_seconds": pose_provider.last_backend_seconds,
+                "canonical_adapter_seconds": pose_provider.last_adapter_seconds,
                 "biomechanics_seconds": biomechanics_seconds,
+                "overlay_seconds": overlay_seconds,
+                "provider_total_pose_stage_seconds": pose_seconds,
+                "fps": None,
             },
         }
-        if args.overlay:
-            render_debug_overlay(image, frame, args.overlay, provider_name=pose_provider.name)
         _write_json(payload, args.output)
         return 0
     if args.command == "benchmark-real-pose":
@@ -164,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(
                 "MIRROR_STATE_UNRESOLVED: pass --input-non-mirrored to attest input state"
             )
-        detector, pose_provider = _real_providers()
+        detector, pose_provider, device, _model_load = _real_providers()
         registry = load_model_registry(_root() / "models/registry.json")
         report = benchmark_real_pose_frames(
             input_path=args.video,
@@ -174,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             pose_provider=pose_provider,
             detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
             pose_model=registry["rtmw-l-cocktail14-256x192"].to_dict(),
+            device=device,
         )
         _write_json(report, args.output)
         return 0

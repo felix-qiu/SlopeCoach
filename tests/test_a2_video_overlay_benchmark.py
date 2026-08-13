@@ -73,9 +73,11 @@ def test_benchmark_classification_aggregation_and_p95(kind, tmp_path) -> None:
         pose_provider=MMPoseRTMWPoseProvider(PoseBackend()),
         detector_model={"provider": "fake", "model_id": "det", "model_version": "1"},
         pose_model={"provider": "fake", "model_id": "pose", "model_version": "1"},
+        device="cpu",
         clock=Clock(),
     )
     assert report["input_kind"] == kind
+    assert report["device"] == "cpu"
     assert report["performance"]["sampled_frame_count"] == 20
     assert report["performance"]["p95_frame_latency_seconds"] == pytest.approx(0.7)
     assert report["detector"]["single_person_frame_ratio"] == 1.0
