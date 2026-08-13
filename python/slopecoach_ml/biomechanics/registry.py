@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 
 from slopecoach_ml.pose import Joint
@@ -15,6 +17,8 @@ HIPS = (Joint.LEFT_HIP, Joint.RIGHT_HIP)
 KNEES = (Joint.LEFT_KNEE, Joint.RIGHT_KNEE)
 ANKLES = (Joint.LEFT_ANKLE, Joint.RIGHT_ANKLE)
 TURN_JOINTS = SHOULDERS + HIPS + KNEES + ANKLES
+BIOMECHANICS_FEATURE_SCHEMA_VERSION = "biomechanics-feature-schema-v1"
+FIXED_ML_FEATURE_VECTOR_STATUS = "NOT_FROZEN"
 
 
 @dataclass(frozen=True)
@@ -214,6 +218,7 @@ TURN_FEATURE_REGISTRY_V1 = (
         BiomechanicsFactScope.TURN,
         "us",
         "A4.1 turn boundary duration.",
+        "TURN_SEGMENT_DERIVED",
     ),
     _nonframe(
         "turn_peak_lateral_proxy",
@@ -221,6 +226,8 @@ TURN_FEATURE_REGISTRY_V1 = (
         BiomechanicsFactScope.TURN,
         "ratio",
         "A4.1 image-space peak proxy.",
+        "TURN_SEGMENT_DERIVED",
+        "IMAGE_SPACE_2D_PROXY_ONLY",
         "NO_PHYSICAL_EDGE_ANGLE",
     ),
     _nonframe(
@@ -305,3 +312,42 @@ FEATURE_REGISTRY_V1 = (
 )
 
 FEATURE_BY_ID = {definition.feature_id: definition for definition in FEATURE_REGISTRY_V1}
+
+
+def canonical_feature_registry_payload(
+    registry: tuple[FeatureDefinition, ...] = FEATURE_REGISTRY_V1,
+) -> list[dict[str, object]]:
+    """Return ordered schema metadata with deterministic nested collection ordering."""
+    return [
+        {
+            "description": definition.description,
+            "family": definition.family.value,
+            "feature_id": definition.feature_id,
+            "limitations": sorted(definition.limitations),
+            "required_joints": sorted(joint.value for joint in definition.required_joints),
+            "scope": definition.scope.value,
+            "unit": definition.unit,
+        }
+        for definition in registry
+    ]
+
+
+def canonical_feature_registry_json(
+    registry: tuple[FeatureDefinition, ...] = FEATURE_REGISTRY_V1,
+) -> str:
+    return json.dumps(
+        canonical_feature_registry_payload(registry),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def feature_registry_sha256(
+    registry: tuple[FeatureDefinition, ...] = FEATURE_REGISTRY_V1,
+) -> str:
+    return hashlib.sha256(canonical_feature_registry_json(registry).encode("utf-8")).hexdigest()
+
+
+FEATURE_REGISTRY_SHA256 = feature_registry_sha256()

@@ -7,6 +7,7 @@ from slopecoach_ml.turns import TurnSegment, ValidSignalRun
 
 from .contracts import BiomechanicsFeatureConfig, TemporalBiomechanicsResult
 from .frame_features import compute_frame_biomechanics
+from .registry import BIOMECHANICS_FEATURE_SCHEMA_VERSION, FEATURE_REGISTRY_SHA256
 from .temporal_features import aggregate_frame_facts, derivative_aggregates, feature_coverage
 from .turn_features import compute_turn_biomechanics
 
@@ -37,10 +38,12 @@ def analyze_temporal_biomechanics(
     }
     turn_features = compute_turn_biomechanics(turns or [], frame_facts, run_timestamps, settings)
     return TemporalBiomechanicsResult(
-        "temporal-biomechanics-v1",
-        settings,
-        frame_facts,
-        aggregates,
-        turn_features,
-        feature_coverage(frame_facts),
+        contract_version="temporal-biomechanics-v2",
+        feature_schema_version=BIOMECHANICS_FEATURE_SCHEMA_VERSION,
+        feature_registry_sha256=FEATURE_REGISTRY_SHA256,
+        config=settings,
+        frame_facts=frame_facts,
+        temporal_segment_features=aggregates,
+        turn_features=turn_features,
+        feature_coverage=feature_coverage(frame_facts),
     )

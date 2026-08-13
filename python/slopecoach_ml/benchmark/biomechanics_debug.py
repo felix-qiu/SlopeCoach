@@ -18,6 +18,12 @@ def write_biomechanics_debug_artifacts(output_dir, report, collector, *, max_fra
         "segment_biomechanics": report["temporal_segment_features"],
         "turn_biomechanics": report["turn_biomechanics"],
         "feature_coverage": report["frame_biomechanics"]["feature_coverage"],
+        "feature_schema": {
+            "feature_schema_version": report["feature_schema_version"],
+            "feature_registry_sha256": report["feature_registry_sha256"],
+            "FIXED_ML_FEATURE_VECTOR_STATUS": report["config"]["FIXED_ML_FEATURE_VECTOR_STATUS"],
+            "feature_registry": report["feature_registry"],
+        },
     }
     paths = {}
     for name, payload in files.items():

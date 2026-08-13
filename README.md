@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A5: Temporal Biomechanics Feature Layer**. The code in
+SlopeCoach is currently in **Phase A5.1: Biomechanics Schema & Turn-Fact Hardening**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -190,6 +190,23 @@ status, and limitations. Missing, low-confidence, out-of-frame, non-square-pixel
 evidence produces JSON `null`, never zero. Normalized distances reuse the A4.1 constant segment
 median raw shoulder-center-to-ankle-center body scale. Derivatives use actual timestamps and never
 bridge missing facts or temporal segments.
+
+A5.1 introduces `temporal-biomechanics-v2` and `ski-bench-biomechanics-v2`. Historical v1
+artifacts retain the original A5 semantics and must not be rewritten. The ordered 30-definition
+registry is identified by `biomechanics-feature-schema-v1` and SHA256
+`2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048`. This schema provenance
+does not freeze an ML input vector: `FIXED_ML_FEATURE_VECTOR_STATUS = NOT_FROZEN`.
+
+V2 enforces `AVAILABLE` if and only if a fact has a finite, non-null, non-bool value; unavailable
+facts must be null. Numeric settings reject booleans and non-finite values. A complete turn window
+requires ordered non-null start/apex/end boundaries, positive duration, and a signal-run ID. Only
+complete windows expose minimum-knee timing facts. A `PARTIAL` turn may still expose matched
+apex-local evidence and whichever start/end boundary exists; absent-boundary facts are
+`TURN_BOUNDARY_UNAVAILABLE`. Apex and boundary matching use separate tolerances, stay within every
+known boundary and signal run, and break equal-distance ties toward the earlier timestamp.
+Single-source turn facts preserve source joint evidence; two-source deltas use minimum confidence
+and unique-joint support without double-counting observations. Turn-segment-derived duration and
+peak proxy do not claim joint support confidence.
 
 All measurements remain image-space 2D and camera/viewpoint dependent. No output is a physical
 center of mass, physical edge angle, diagnosis, technique classification, or score. Run:

@@ -99,3 +99,20 @@ make benchmark-biomechanics \
 Biomechanics GT is unavailable, so feature accuracy and MAE remain `null`. Coverage is evidence
 availability, not accuracy. Facts are camera-dependent image-space proxies without diagnosis,
 scores, physical COM, physical edge angle, or a frozen ML feature vector.
+
+Phase A5.1 hardens new output to `ski-bench-biomechanics-v2`, containing
+`temporal-biomechanics-v2`, feature schema `biomechanics-feature-schema-v1`, and registry SHA256
+`2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048`. The 14 frame, 4 temporal,
+and 12 turn feature IDs and their order are unchanged. Historical v1 artifacts remain historical.
+V2 makes available/null invariants symmetric, rejects bool-as-number configuration, limits the
+three minimum-knee timing facts to complete bounded turns, preserves valid apex/local boundary
+facts for partial turns, and propagates conservative source evidence. Matching is signal-run-local,
+inside all known boundaries, and deterministically prefers an earlier timestamp on equal distance.
+The ML vector remains `NOT_FROZEN`; no diagnosis or score is produced.
+
+```bash
+make benchmark-biomechanics \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a5_1/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a5_1_biomechanics/ski_test_001_5fps
+```

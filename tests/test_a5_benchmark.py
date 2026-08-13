@@ -60,7 +60,12 @@ def test_a5_benchmark_contract_status_and_gt_nulls(monkeypatch):
         pose_model={"model_id": "pose"},
         appearance_encoder=Appearance(),
     )
-    assert report["benchmark_contract_version"] == "ski-bench-biomechanics-v1"
+    assert report["benchmark_contract_version"] == "ski-bench-biomechanics-v2"
+    assert (
+        report["biomechanics_result"]["contract_version"] == "temporal-biomechanics-v2"
+    )
+    assert report["feature_schema_version"] == "biomechanics-feature-schema-v1"
+    assert len(report["feature_registry_sha256"]) == 64
     assert report["config"]["FIXED_ML_FEATURE_VECTOR_STATUS"] == "NOT_FROZEN"
     assert len(report["frame_biomechanics"]["feature_coverage"]) == 14
     assert len(report["feature_registry"]) == 30

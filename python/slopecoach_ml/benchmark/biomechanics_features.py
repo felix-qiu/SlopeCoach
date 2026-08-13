@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
 
 from slopecoach_ml.biomechanics import (
+    BIOMECHANICS_FEATURE_SCHEMA_VERSION,
+    FEATURE_REGISTRY_SHA256,
     FEATURE_REGISTRY_V1,
+    FIXED_ML_FEATURE_VECTOR_STATUS,
     BiomechanicsFeatureConfig,
     TemporalBiomechanicsResult,
     aggregate_frame_facts,
@@ -107,13 +111,16 @@ def benchmark_biomechanics_frames(
     )
     turn_seconds = time.perf_counter() - stage
     result = TemporalBiomechanicsResult(
-        "temporal-biomechanics-v1",
-        biomechanics_config,
-        frame_facts,
-        aggregates,
-        turn_features,
-        coverage,
+        contract_version="temporal-biomechanics-v2",
+        feature_schema_version=BIOMECHANICS_FEATURE_SCHEMA_VERSION,
+        feature_registry_sha256=FEATURE_REGISTRY_SHA256,
+        config=biomechanics_config,
+        frame_facts=frame_facts,
+        temporal_segment_features=aggregates,
+        turn_features=turn_features,
+        feature_coverage=coverage,
     )
+    serialized_result = json.loads(result.to_json())
     trusted = len({fact.timestamp_us for fact in result.frame_facts if fact.temporal_segment_id})
     real_status = (
         "NOT_ANALYZABLE_NO_TRUSTED_TARGET_POSE"
@@ -124,15 +131,17 @@ def benchmark_biomechanics_frames(
     )
     upstream_perf = upstream["performance"]
     report = {
-        "benchmark_contract_version": "ski-bench-biomechanics-v1",
+        "benchmark_contract_version": "ski-bench-biomechanics-v2",
         "input_kind": "REAL_VIDEO",
         "runtime": upstream["runtime"],
         "models": upstream["models"],
         "config": {
-            "profile": "RESEARCH_DEFAULTS_A5",
-            "biomechanics": result.to_dict()["config"],
-            "FIXED_ML_FEATURE_VECTOR_STATUS": "NOT_FROZEN",
+            "profile": "RESEARCH_DEFAULTS_A5_1",
+            "biomechanics": serialized_result["config"],
+            "FIXED_ML_FEATURE_VECTOR_STATUS": FIXED_ML_FEATURE_VECTOR_STATUS,
         },
+        "feature_schema_version": BIOMECHANICS_FEATURE_SCHEMA_VERSION,
+        "feature_registry_sha256": FEATURE_REGISTRY_SHA256,
         "feature_registry": [
             {
                 "feature_id": item.feature_id,
@@ -162,7 +171,7 @@ def benchmark_biomechanics_frames(
         },
         "temporal_segment_features": [item.to_dict() for item in result.temporal_segment_features],
         "turn_biomechanics": [item.to_dict() for item in result.turn_features],
-        "biomechanics_result": result.to_dict(),
+        "biomechanics_result": serialized_result,
         "performance": {
             "detector_total_seconds": upstream_perf["detector_total_seconds"],
             "tracking_identity_total_seconds": upstream_perf["tracking_identity_total_seconds"],
@@ -186,7 +195,7 @@ def benchmark_biomechanics_frames(
         },
         "validation": {
             "REAL_BIOMECHANICS_STATUS": real_status,
-            "A5_ENGINEERING_VALIDATION": "PASS" if trusted else "PASS_WITH_LIMITATIONS",
+            "A5_1_ENGINEERING_VALIDATION": "PASS" if trusted else "PASS_WITH_LIMITATIONS",
             "A5_PRODUCT_VALIDATION": "BLOCKED_BY_GT",
         },
         "limitations": list(result.limitations),

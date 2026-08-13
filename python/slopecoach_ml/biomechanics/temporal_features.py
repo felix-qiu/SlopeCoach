@@ -73,6 +73,7 @@ def aggregate_frame_facts(
 def derivative_aggregates(
     facts: tuple[BiomechanicsFact, ...], config: BiomechanicsFeatureConfig
 ) -> tuple[FeatureAggregate, ...]:
+    config.validate()
     results = []
     segments = sorted(
         {fact.temporal_segment_id for fact in facts if fact.temporal_segment_id is not None}
