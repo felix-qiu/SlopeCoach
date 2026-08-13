@@ -16,13 +16,16 @@ from slopecoach_ml.detection import Detection, DetectorProvider
 from slopecoach_ml.identity import (
     AutoInitialTargetSelector,
     CandidateFilterConfig,
+    GroundTruthEvaluationConfig,
     HSVHistogramAppearanceEncoder,
     InitialTargetSelectorConfig,
     PoseSchedulingConfig,
     TargetIdentityConfig,
+    TargetIdentityGroundTruth,
     TargetIdentityManager,
     TargetIdentityState,
     evaluate_candidates,
+    evaluate_target_identity_ground_truth,
     schedule_pose_track_ids,
     target_biomechanics_allowed,
 )
@@ -46,16 +49,17 @@ def _p95(values: list[float]) -> float | None:
     return ordered[math.ceil(0.95 * len(ordered)) - 1]
 
 
-def _config_dict(candidate, tracking, selector, identity, scheduling):
+def _config_dict(candidate, tracking, selector, identity, scheduling, ground_truth):
     from dataclasses import asdict
 
     return {
-        "profile": "RESEARCH_DEFAULTS_A3",
+        "profile": "RESEARCH_DEFAULTS_A3_1",
         "candidate_filter": asdict(candidate),
         "tracking": tracking.to_dict(),
         "initial_target_selector": asdict(selector),
         "target_identity": asdict(identity),
         "pose_scheduling": asdict(scheduling),
+        "ground_truth_evaluation": asdict(ground_truth),
     }
 
 
@@ -78,6 +82,9 @@ def benchmark_target_identity_frames(
     scheduling_config: PoseSchedulingConfig | None = None,
     frame_observer: Callable[[SampledFrame, dict[str, Any], PoseFrame | None], None] | None = None,
     appearance_encoder: Any | None = None,
+    target_ground_truth: TargetIdentityGroundTruth | None = None,
+    ground_truth_config: GroundTruthEvaluationConfig | None = None,
+    ground_truth_status: str = "NOT_AVAILABLE",
     clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     candidate_settings = candidate_config or CandidateFilterConfig()
@@ -85,12 +92,14 @@ def benchmark_target_identity_frames(
     selector_settings = selector_config or InitialTargetSelectorConfig()
     identity_settings = identity_config or TargetIdentityConfig()
     scheduling_settings = scheduling_config or PoseSchedulingConfig()
+    ground_truth_settings = ground_truth_config or GroundTruthEvaluationConfig()
     for settings in (
         candidate_settings,
         tracking_settings,
         selector_settings,
         identity_settings,
         scheduling_settings,
+        ground_truth_settings,
     ):
         settings.validate()
     tracker = ReferenceMotionIoUTracker(tracking_settings)
@@ -117,6 +126,7 @@ def benchmark_target_identity_frames(
     pose_quality_by_track: dict[int, float] = {}
     confirmed_track_ids: set[int] = set()
     for sampled in frames:
+        identity_matches = ()
         if first_timestamp is None:
             first_timestamp = sampled.timestamp_us
         pipeline_started = clock()
@@ -196,7 +206,7 @@ def benchmark_target_identity_frames(
                 manager.identity.state = selection.state
         elif manager.identity.initial_selection_score is not None:
             before_relocks = manager.relock_count
-            manager.update(
+            identity_matches = manager.update(
                 current_tracks,
                 candidates_by_detection,
                 sampled.timestamp_us,
@@ -226,6 +236,7 @@ def benchmark_target_identity_frames(
             scheduling_settings,
         )
         tracks_by_id = {track.track_id: track for track in current_tracks}
+        selected_track = tracks_by_id.get(manager.identity.active_track_id)
         scheduled_tracks = [tracks_by_id[item] for item in scheduled_ids if item in tracks_by_id]
         scheduled_detections = tuple(
             Detection(track.detection_id, track.bbox, track.confidence)
@@ -314,11 +325,19 @@ def benchmark_target_identity_frames(
             "identity_state": state.value,
             "identity_confidence": manager.identity.confidence,
             "selected_bbox": (
-                target_person.bbox.to_dict()
-                if target_person is not None
+                selected_track.bbox.to_dict()
+                if selected_track is not None
                 and manager.identity.state is TargetIdentityState.LOCKED
                 else None
             ),
+            "identity_match_evidence": [
+                {
+                    "track_id": match.track_id,
+                    "fused_score": match.fused_score,
+                    "evidence": match.evidence.__dict__,
+                }
+                for match in sorted(identity_matches, key=lambda item: -item.fused_score)[:3]
+            ],
             "initial_selection_score": selection.score if selection else None,
             "initial_selection_margin": selection.margin if selection else None,
             "candidate_scores": {str(item.detection_id): item.quality_score for item in candidates},
@@ -350,8 +369,8 @@ def benchmark_target_identity_frames(
     sampled_count = len(observations)
     total_raw = totals["raw_detections"]
     baseline = _load_a2_baseline(input_path)
-    return {
-        "benchmark_contract_version": "ski-bench-target-identity-v1",
+    report = {
+        "benchmark_contract_version": "ski-bench-target-identity-v2",
         "input_kind": "REAL_VIDEO",
         "runtime": {
             "device": device,
@@ -366,6 +385,7 @@ def benchmark_target_identity_frames(
             selector_settings,
             identity_settings,
             scheduling_settings,
+            ground_truth_settings,
         ),
         "video": metadata.to_dict(),
         "sampling": {
@@ -392,7 +412,9 @@ def benchmark_target_identity_frames(
             "implementation": tracker.implementation,
             "total_tracks_created": tracker.total_tracks_created,
             "confirmed_tracks": len(confirmed_track_ids),
-            "track_fragments": tracker.total_tracks_terminated,
+            "terminated_track_count": tracker.total_tracks_terminated,
+            "track_fragmentation_gt_status": "NOT_AVAILABLE",
+            "track_fragmentation_count": None,
             "active_track_count_mean": mean(active_track_counts) if active_track_counts else None,
             "active_track_count_max": max(active_track_counts) if active_track_counts else None,
         },
@@ -461,6 +483,7 @@ def benchmark_target_identity_frames(
             "p95_pose_seconds": _p95(pose_latencies),
             "mean_pipeline_seconds": mean(pipeline_latencies) if pipeline_latencies else None,
             "p95_pipeline_seconds": _p95(pipeline_latencies),
+            "ground_truth_evaluation_seconds": 0.0,
         },
         "frame_observations": observations,
         "relock_frame_indices": relock_frames,
@@ -471,13 +494,73 @@ def benchmark_target_identity_frames(
             "NO_TEMPORAL_POSE_SMOOTHING",
             "DEEP_REID_NOT_CONFIGURED",
         ],
-        "TARGET_IDENTITY_GT_STATUS": "NOT_AVAILABLE",
-        "wrong_target_rate": None,
-        "target_frame_accuracy": None,
+        "ground_truth": {
+            "status": ground_truth_status,
+            "contract_version": target_ground_truth.contract_version
+            if target_ground_truth
+            else None,
+            "video_sha256": target_ground_truth.video_sha256 if target_ground_truth else None,
+            "annotated_frame_count": len(target_ground_truth.frames)
+            if target_ground_truth
+            else None,
+        },
+        "identity_accuracy": {
+            "correct_lock_count": None,
+            "wrong_target_lock_count": None,
+            "target_not_locked_count": None,
+            "false_lock_when_absent_count": None,
+            "target_lock_coverage_when_present": None,
+            "wrong_target_rate": None,
+            "false_lock_when_absent_rate": None,
+            "target_frame_accuracy": None,
+        },
+        "target_present_state_metrics": {
+            "target_present_frame_count": None,
+            "target_present_and_correctly_locked_count": None,
+            **{
+                f"{state.lower()}_when_present_ratio": None
+                for state in TargetIdentityState.__members__
+            },
+        },
+        "target_absent_state_metrics": {
+            "target_absent_frame_count": None,
+            **{
+                f"{state.lower()}_when_absent_ratio": None
+                for state in TargetIdentityState.__members__
+            },
+        },
+        "recovery": {
+            "REAL_RECOVERY_STATUS": "NOT_EXERCISED_NO_REENTRY_VIDEO",
+            "recovery_opportunity_count": None,
+            "successful_recovery_count": None,
+            "recovery_success_rate": None,
+            "median_reacquisition_time_us": None,
+            "max_reacquisition_time_us": None,
+            "recovery_wrong_target_count": None,
+        },
+        "TARGET_IDENTITY_GT_STATUS": ground_truth_status,
         "DEEP_REID_STATUS": "NOT_CONFIGURED",
         "USER_TARGET_CORRECTION_STATUS": "DEFERRED",
         "BYTETRACK_STATUS": "NOT_INTEGRATED",
     }
+    if target_ground_truth is not None and ground_truth_status == "AVAILABLE":
+        gt_started = clock()
+        evaluation = evaluate_target_identity_ground_truth(
+            observations, target_ground_truth, ground_truth_settings
+        )
+        report["performance"]["ground_truth_evaluation_seconds"] = clock() - gt_started
+        for key in (
+            "ground_truth",
+            "identity_accuracy",
+            "target_present_state_metrics",
+            "target_absent_state_metrics",
+            "recovery",
+        ):
+            report[key] = evaluation[key]
+        report["tracking"].update(evaluation["tracking_gt"])
+        report["frame_gt_classifications"] = evaluation["frame_classifications"]
+        report["TARGET_IDENTITY_GT_STATUS"] = "AVAILABLE"
+    return report
 
 
 def _load_a2_baseline(input_path: str | Path) -> dict[str, Any]:

@@ -27,3 +27,25 @@ suspect, recovering, and lost frames suppress target biomechanics. The lightweig
 appearance descriptor is not deep ReID, and target-identity accuracy metrics remain `null`
 without formal frame annotations. A3 artifacts belong under ignored `artifacts/`; local videos
 remain ignored and are never CI inputs.
+
+Phase A3.1 uses benchmark contract `ski-bench-target-identity-v2`. It requires the final initial
+winner to be present on the decision frame, bounds historical evidence by timestamp, and uses a
+capped constant-velocity prediction normalized by the last target bbox diagonal. Tracker
+termination is `terminated_track_count`; v1's `track_fragments` was a misnamed termination count,
+not GT-backed fragmentation.
+
+Optional identity annotations live under `annotations/` and use `target-identity-gt-v1`. A template
+contains the source video SHA256 and actual decoded sample timestamps, but every generated entry is
+`UNLABELED` with `bbox: null`. A human must label the intended subject independently of detector,
+tracker, pose, and identity output. Benchmark use verifies the video hash and reports only
+timestamp-matched, unique samples within the configured tolerance. Without reviewed `PRESENT` or
+`ABSENT` labels, identity accuracy and recovery results remain null.
+
+```bash
+make prepare-target-gt VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 \
+  TARGET_GT=benchmarks/ski_bench/annotations/ski_test_001.target.json \
+  GT_REVIEW_DIR=artifacts/debug/a3_1_gt/ski_test_001 SAMPLE_FPS=5
+```
+
+Human-labeling review frames contain only the source image, timestamp, and frame index. Separate
+`gt_comparison/` model overlays are produced only when a reviewed GT file is evaluated.

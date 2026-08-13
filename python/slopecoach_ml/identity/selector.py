@@ -50,6 +50,14 @@ class AutoInitialTargetSelector:
     ) -> InitialSelectionResult:
         if self._started_us is None:
             self._started_us = timestamp_us
+        expired = [
+            track_id
+            for track_id, history in self._history.items()
+            if timestamp_us - history.last_seen_us > self.config.maximum_history_staleness_us
+        ]
+        for track_id in expired:
+            del self._history[track_id]
+        current_eligible_track_ids: set[int] = set()
         frame_center = (geometry.width_px / 2, geometry.height_px / 2)
         frame_diag = math.hypot(geometry.width_px, geometry.height_px)
         for track in tracks:
@@ -58,6 +66,7 @@ class AutoInitialTargetSelector:
             candidate = candidates_by_detection.get(track.detection_id)
             if candidate is None or candidate.hard_rejection_reason:
                 continue
+            current_eligible_track_ids.add(track.track_id)
             history = self._history.setdefault(track.track_id, _History(first_seen_us=timestamp_us))
             center = (
                 track.bbox.x_px + track.bbox.width_px / 2,
@@ -131,18 +140,19 @@ class AutoInitialTargetSelector:
             if score is not None:
                 scores.append((score, track_id))
         scores.sort(reverse=True)
+        eligible_scores = [item for item in scores if item[1] in current_eligible_track_ids]
         elapsed = timestamp_us - self._started_us
         if elapsed < self.config.initialization_window_us:
             return InitialSelectionResult(
                 None,
-                scores[0][0] if scores else None,
-                scores[1][0] if len(scores) > 1 else None,
+                eligible_scores[0][0] if eligible_scores else None,
+                eligible_scores[1][0] if len(eligible_scores) > 1 else None,
                 None,
                 TargetIdentityState.UNINITIALIZED,
                 evidence,
             )
-        best = scores[0] if scores else None
-        runner = scores[1][0] if len(scores) > 1 else None
+        best = eligible_scores[0] if eligible_scores else None
+        runner = eligible_scores[1][0] if len(eligible_scores) > 1 else None
         margin = best[0] - runner if best and runner is not None else best[0] if best else None
         eligible = (
             best and self._history[best[1]].observations >= self.config.minimum_track_observations
@@ -157,7 +167,9 @@ class AutoInitialTargetSelector:
                 best[1], best[0], runner, margin, TargetIdentityState.LOCKED, evidence
             )
         state = (
-            TargetIdentityState.AMBIGUOUS if len(scores) > 1 else TargetIdentityState.UNINITIALIZED
+            TargetIdentityState.AMBIGUOUS
+            if len(eligible_scores) > 1
+            else TargetIdentityState.UNINITIALIZED
         )
         return InitialSelectionResult(
             None, best[0] if best else None, runner, margin, state, evidence

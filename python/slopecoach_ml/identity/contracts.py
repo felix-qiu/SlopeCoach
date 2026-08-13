@@ -58,10 +58,13 @@ class InitialTargetSelectorConfig:
     detection_weight: float = 0.10
     candidate_quality_weight: float = 0.10
     pose_quality_weight: float = 0.10
+    maximum_history_staleness_us: int = 3_000_000
 
     def validate(self) -> None:
         if self.initialization_window_us < 0 or self.minimum_track_observations < 1:
             raise ValueError("initialization time/observation limits are invalid")
+        if self.maximum_history_staleness_us < 0:
+            raise ValueError("maximum_history_staleness_us must be non-negative")
         for name in (
             "minimum_lock_score",
             "minimum_winner_margin",
@@ -94,6 +97,7 @@ class TargetIdentityConfig:
     appearance_weight: float = 0.15
     candidate_quality_weight: float = 0.05
     pose_weight: float = 0.10
+    maximum_trajectory_prediction_us: int = 1_500_000
 
     def validate(self) -> None:
         for name in (
@@ -116,6 +120,8 @@ class TargetIdentityConfig:
             raise ValueError("identity timeouts are invalid")
         if self.recovery_confirmation_observations < 1:
             raise ValueError("recovery_confirmation_observations must be positive")
+        if self.maximum_trajectory_prediction_us < 0:
+            raise ValueError("maximum_trajectory_prediction_us must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -177,6 +183,9 @@ class IdentityEvidence:
     candidate_quality: float | None
     pose_similarity: float | None
     reliability: float
+    predicted_center: tuple[float, float] | None = None
+    candidate_center: tuple[float, float] | None = None
+    trajectory_normalized_distance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +206,7 @@ class TargetIdentity:
     last_seen_us: int | None = None
     velocity_x_px_per_s: float = 0.0
     velocity_y_px_per_s: float = 0.0
+    velocity_available: bool = False
     trajectory_history: list[tuple[int, float, float]] = field(default_factory=list)
     appearance_gallery: list[Sequence[float]] = field(default_factory=list)
 

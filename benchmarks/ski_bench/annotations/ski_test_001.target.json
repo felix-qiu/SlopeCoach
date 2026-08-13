@@ -1,0 +1,951 @@
+{
+  "annotation_source": "USER_MANUAL",
+  "contract_version": "target-identity-gt-v1",
+  "coordinate_space": "SourcePixel2D",
+  "duration_seconds": 26.766667,
+  "frames": [
+    {
+      "bbox": null,
+      "frame_index": 0,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 0
+    },
+    {
+      "bbox": null,
+      "frame_index": 6,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 12,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 18,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 24,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 30,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 1000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 36,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 1200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 42,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 1400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 48,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 1600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 54,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 1800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 60,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 2000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 66,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 2200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 72,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 2400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 78,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 2600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 84,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 2800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 90,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 3000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 96,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 3200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 102,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 3400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 108,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 3600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 114,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 3800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 120,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 4000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 126,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 4200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 132,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 4400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 138,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 4600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 144,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 4800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 150,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 5000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 156,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 5200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 162,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 5400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 168,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 5600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 174,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 5800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 180,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 6000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 186,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 6200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 192,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 6400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 198,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 6600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 204,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 6800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 210,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 7000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 216,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 7200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 222,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 7400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 228,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 7600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 234,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 7800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 240,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 8000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 246,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 8200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 252,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 8400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 258,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 8600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 264,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 8800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 270,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 9000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 276,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 9200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 282,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 9400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 288,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 9600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 294,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 9800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 300,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 10000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 306,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 10200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 312,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 10400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 318,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 10600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 324,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 10800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 330,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 11000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 336,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 11200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 342,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 11400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 348,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 11600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 354,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 11800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 360,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 12000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 366,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 12200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 372,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 12400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 378,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 12600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 384,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 12800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 390,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 13000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 396,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 13200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 402,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 13400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 408,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 13600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 414,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 13800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 420,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 14000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 426,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 14200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 432,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 14400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 438,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 14600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 444,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 14800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 450,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 15000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 456,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 15200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 462,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 15400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 468,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 15600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 474,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 15800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 480,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 16000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 486,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 16200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 492,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 16400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 498,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 16600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 504,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 16800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 510,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 17000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 516,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 17200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 522,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 17400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 528,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 17600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 534,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 17800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 540,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 18000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 546,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 18200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 552,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 18400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 558,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 18600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 564,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 18800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 570,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 19000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 576,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 19200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 582,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 19400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 588,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 19600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 594,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 19800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 600,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 20000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 606,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 20200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 612,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 20400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 618,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 20600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 624,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 20800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 630,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 21000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 636,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 21200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 642,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 21400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 648,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 21600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 654,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 21800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 660,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 22000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 666,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 22200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 672,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 22400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 678,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 22600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 684,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 22800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 690,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 23000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 696,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 23200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 702,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 23400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 708,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 23600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 714,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 23800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 720,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 24000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 726,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 24200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 732,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 24400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 738,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 24600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 744,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 24800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 750,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 25000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 756,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 25200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 762,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 25400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 768,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 25600000
+    },
+    {
+      "bbox": null,
+      "frame_index": 774,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 25800000
+    },
+    {
+      "bbox": null,
+      "frame_index": 780,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 26000000
+    },
+    {
+      "bbox": null,
+      "frame_index": 786,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 26200000
+    },
+    {
+      "bbox": null,
+      "frame_index": 792,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 26400000
+    },
+    {
+      "bbox": null,
+      "frame_index": 798,
+      "notes": null,
+      "target_state": "UNLABELED",
+      "timestamp_us": 26600000
+    }
+  ],
+  "height_px": 1280,
+  "sample_fps": 5.0,
+  "video_path_hint": "ski_test_001.mp4",
+  "video_sha256": "280757810ed7598e3d1645a0934f7c7b46927362c9c7d57797ad3fe48b863563",
+  "width_px": 720
+}

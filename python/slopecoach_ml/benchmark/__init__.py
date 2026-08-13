@@ -4,7 +4,11 @@ from .real_pose import (
     benchmark_real_pose_frames,
     select_debug_frame_indices,
 )
-from .target_debug import TargetIdentityDebugCollector, select_target_debug_indices
+from .target_debug import (
+    TargetIdentityDebugCollector,
+    select_target_debug_indices,
+    write_ground_truth_comparison,
+)
 from .target_identity import benchmark_target_identity_frames
 
 __all__ = [
@@ -14,6 +18,7 @@ __all__ = [
     "benchmark_target_identity_frames",
     "TargetIdentityDebugCollector",
     "select_target_debug_indices",
+    "write_ground_truth_comparison",
     "benchmark_video",
     "select_debug_frame_indices",
 ]

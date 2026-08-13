@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden benchmark pose-doctor pose-smoke benchmark-real-pose benchmark-target-identity openmmlab-macos
+.PHONY: doctor python test lint golden benchmark pose-doctor pose-smoke benchmark-real-pose benchmark-target-identity prepare-target-gt openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -41,7 +41,12 @@ benchmark-real-pose:
 
 benchmark-target-identity:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-target-identity VIDEO=/path/to/video' >&2; exit 2)
-	$(UV) run --project python python -m slopecoach_ml.cli benchmark-target-identity "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),2)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-target-identity "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),2)" --input-non-mirrored $(if $(or $(TARGET_GT),$(GT)),--target-gt "$(or $(TARGET_GT),$(GT))",) $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+
+prepare-target-gt:
+	@test -n "$(VIDEO)" || (echo 'usage: make prepare-target-gt VIDEO=/path/to/video TARGET_GT=/path/to/template.json' >&2; exit 2)
+	@test -n "$(or $(TARGET_GT),$(GT))" || (echo 'TARGET_GT output path is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli prepare-target-gt "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --output "$(or $(TARGET_GT),$(GT))" $(if $(or $(GT_REVIEW_DIR),$(REVIEW_DIR)),--review-dir "$(or $(GT_REVIEW_DIR),$(REVIEW_DIR))",)
 
 openmmlab-macos:
 	bash scripts/bootstrap_openmmlab_macos.sh

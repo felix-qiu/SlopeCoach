@@ -190,6 +190,40 @@ def test_initial_selector_no_person_remains_uninitialized() -> None:
     assert result.selected_track_id is None
 
 
+def test_stale_historical_winner_cannot_be_selected_when_absent() -> None:
+    selector = AutoInitialTargetSelector(
+        InitialTargetSelectorConfig(
+            initialization_window_us=1_500_000,
+            minimum_track_observations=1,
+            minimum_lock_score=0.1,
+            minimum_winner_margin=0.0,
+        )
+    )
+    strong = track(1, 400)
+    weak = track(2, 50)
+    for timestamp in (0, 500_000, 1_000_000):
+        selector.observe((strong,), {1: candidate(strong)}, GEOMETRY, timestamp)
+    result = selector.observe(
+        (weak,), {2: candidate(weak, quality=0.5)}, GEOMETRY, 1_500_000
+    )
+    assert result.selected_track_id != 1
+
+
+def test_selector_history_expires_by_timestamp_and_shuffle_is_safe() -> None:
+    config = InitialTargetSelectorConfig(
+        initialization_window_us=2_000_000,
+        minimum_track_observations=1,
+        maximum_history_staleness_us=100_000,
+    )
+    selector = AutoInitialTargetSelector(config)
+    old = track(9, 400)
+    selector.observe((old,), {9: candidate(old)}, GEOMETRY, 0)
+    current = track(2, 350)
+    result = selector.observe((current,), {2: candidate(current)}, GEOMETRY, 200_000)
+    assert 9 not in result.evidence
+    assert 2 in result.evidence
+
+
 def test_giant_one_frame_transient_does_not_beat_persistent_track() -> None:
     selector = AutoInitialTargetSelector(
         InitialTargetSelectorConfig(
@@ -276,6 +310,86 @@ def test_target_and_track_identity_are_structurally_distinct_and_relock_new_trac
     assert manager.identity.active_track_id == 12
     assert manager.identity.target_id == "filmed-skier"
     assert manager.relock_count == 1
+
+
+def test_trajectory_prediction_is_distinct_from_spatial_and_uses_time() -> None:
+    manager = TargetIdentityManager(
+        TargetIdentityConfig(maximum_trajectory_prediction_us=2_000_000)
+    )
+    initial = TrackObservation(
+        1,
+        1,
+        BoundingBox2D(50, 100, 100, 200),
+        0.9,
+        TrackState.CONFIRMED,
+        3,
+        0,
+        0,
+        0,
+        100.0,
+        0.0,
+    )
+    manager.initialize(initial, 0.9, 0)
+    predicted = track(2, 150, timestamp=1_000_000)
+    match = manager._match(predicted, candidate(predicted), 1_000_000)
+    assert match.evidence.predicted_center == pytest.approx((200, 200))
+    assert match.evidence.trajectory_similarity == pytest.approx(1)
+    assert match.evidence.spatial_similarity < match.evidence.trajectory_similarity
+    assert match.evidence.trajectory_normalized_distance == pytest.approx(0)
+
+
+def test_trajectory_prediction_horizon_is_capped() -> None:
+    manager = TargetIdentityManager(
+        TargetIdentityConfig(maximum_trajectory_prediction_us=500_000)
+    )
+    initial = TrackObservation(
+        1,
+        1,
+        BoundingBox2D(50, 100, 100, 200),
+        0.9,
+        TrackState.CONFIRMED,
+        3,
+        0,
+        0,
+        0,
+        100.0,
+        0.0,
+    )
+    manager.initialize(initial, 0.9, 0)
+    candidate_track = track(2, 100, timestamp=10_000_000)
+    match = manager._match(candidate_track, candidate(candidate_track), 10_000_000)
+    assert match.evidence.predicted_center == pytest.approx((150, 200))
+
+
+def test_trajectory_missing_history_is_null_and_negative_time_rejected() -> None:
+    manager = TargetIdentityManager()
+    item = track(1, 100)
+    assert (
+        manager._match(item, candidate(item), 0).evidence.trajectory_similarity is None
+    )
+    with pytest.raises(ValueError, match="timestamp_us"):
+        manager._match(item, candidate(item), -1)
+
+
+def test_trajectory_is_null_until_velocity_has_real_track_evidence() -> None:
+    manager = TargetIdentityManager()
+    item = TrackObservation(
+        1,
+        1,
+        BoundingBox2D(50, 100, 100, 200),
+        0.9,
+        TrackState.TENTATIVE,
+        1,
+        0,
+        0,
+        0,
+        0.0,
+        0.0,
+    )
+    manager.initialize(item, 0.9, 0)
+    match = manager._match(item, candidate(item), 100_000)
+    assert match.evidence.spatial_similarity == 1
+    assert match.evidence.trajectory_similarity is None
 
 
 def test_brief_miss_is_suspect_then_same_track_locks_again() -> None:

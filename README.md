@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A3: Target Identity Research Reference**. The code in
+SlopeCoach is currently in **Phase A3.1: Target Identity Benchmark Hardening**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -170,17 +170,48 @@ pose or appearance evidence remains `null` and weights are renormalized. Close w
 `LOCKED`, `SUSPECT`, `LOST`, `RECOVERING`, and `AMBIGUOUS`; only a sufficiently confident
 `LOCKED` target may produce reference biomechanics.
 
+At the final initialization decision, historical observations remain diagnostic evidence, but
+only a viable, non-missing track present on that exact frame may win. Selector history expires by
+timestamp after the configured staleness limit. Identity trajectory evidence predicts
+`last_center + velocity * dt`; `dt` is capped at the configured horizon and distance is normalized
+by the last trusted bbox diagonal. Missing velocity/history yields `null`, not zero similarity.
+
 The default appearance descriptor is a bounded HSV histogram with safely clipped crops. It is
 lightweight research evidence, not deep ReID (`DEEP_REID_STATUS = NOT_CONFIGURED`). Pose
 scheduling is bounded: initialization/ambiguity may probe at most two candidates, a locked frame
 poses only the active target, and uncertain states suppress target biomechanics. Manual user
 target correction remains architecturally possible but deferred.
 
-All A3 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
-`RESEARCH_DEFAULTS_A3`; they are conservative provisional defaults, not scientifically optimal
-values. The identity benchmark reports candidate reduction without calling it precision, and
-keeps `TARGET_IDENTITY_GT_STATUS = NOT_AVAILABLE`, `wrong_target_rate = null`, and
-`target_frame_accuracy = null` until genuine frame-level annotations exist.
+All A3.1 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
+research defaults; they are conservative provisional defaults, not scientifically validated
+values. Benchmark contract `ski-bench-target-identity-v2` reports tracker terminations as
+`terminated_track_count`. Historical v1 `track_fragments` was a misnamed termination count and
+must not be reinterpreted as person fragmentation. Fragmentation is `null` until identity GT
+supports it.
+
+Target GT contract `target-identity-gt-v1` is timestamp-based, manually authored
+`SourcePixel2D` truth with video SHA256 integrity. Generate an empty review template (all labels
+remain `UNLABELED`, no model boxes are copied) and then have a human annotate it:
+
+```bash
+make prepare-target-gt VIDEO=benchmarks/ski_bench/videos/example.mp4 \
+  TARGET_GT=benchmarks/ski_bench/annotations/example.target.json \
+  GT_REVIEW_DIR=artifacts/debug/a3_1_gt/example SAMPLE_FPS=5
+
+make benchmark-target-identity VIDEO=benchmarks/ski_bench/videos/example.mp4 \
+  TARGET_GT=benchmarks/ski_bench/annotations/example.target.json SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a3_1/example.json \
+  DEBUG_DIR=artifacts/debug/a3_1_identity/example
+```
+
+`PRESENT` requires a human bbox; `ABSENT` requires null; `UNCERTAIN` and `UNLABELED` are excluded.
+The research match threshold defaults to IoU 0.5 and is not scientifically validated. Metrics are
+`CORRECT_LOCK / PRESENT` for present lock coverage, wrong locks divided by system locks on
+evaluable timestamps for wrong-target rate, and correctly handled `PRESENT+ABSENT` divided by all
+evaluable frames for frame accuracy. Until reviewed labels exist,
+`TARGET_IDENTITY_GT_STATUS = TEMPLATE_CREATED_REQUIRES_HUMAN_LABELING` (or `NOT_AVAILABLE`) and all
+accuracy, presence-conditioned, false-lock, fragmentation, and real-recovery metrics stay JSON
+`null`.
 
 ```bash
 make benchmark-target-identity \
@@ -189,6 +220,9 @@ make benchmark-target-identity \
   OUTPUT=artifacts/benchmarks/a3/example.json \
   DEBUG_DIR=artifacts/debug/a3_target_identity/example
 ```
+
+Pass `TARGET_GT=/path/to/reviewed.target.json` only after manual review. Human annotation images
+and model-comparison overlays are separate artifact layers; model output is never GT.
 
 The provisional `ReferenceAnalysisConfig` centrally defines the joint confidence and square-pixel
 tolerance. Callers explicitly provide analysis/provider/model provenance, preventing future real

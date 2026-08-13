@@ -75,15 +75,18 @@ def test_target_benchmark_contract_pose_reduction_and_null_gt(monkeypatch) -> No
         appearance_encoder=Appearance(),
         clock=Clock(),
     )
-    assert report["benchmark_contract_version"] == "ski-bench-target-identity-v1"
+    assert report["benchmark_contract_version"] == "ski-bench-target-identity-v2"
     assert report["input_kind"] == "REAL_VIDEO"
     assert report["detections"]["raw_detection_person_count"] == 12
     assert report["candidates"]["viable_candidate_count"] == 6
     assert report["pose_efficiency"]["pose_person_inference_count"] <= 6
     assert report["pose_efficiency"]["pose_inference_reduction_ratio"] >= 0.5
     assert report["TARGET_IDENTITY_GT_STATUS"] == "NOT_AVAILABLE"
-    assert report["wrong_target_rate"] is None
-    assert report["target_frame_accuracy"] is None
+    assert report["identity_accuracy"]["wrong_target_rate"] is None
+    assert report["identity_accuracy"]["target_frame_accuracy"] is None
+    assert report["tracking"]["terminated_track_count"] >= 0
+    assert report["tracking"]["track_fragmentation_count"] is None
+    assert "track_fragments" not in report["tracking"]
     assert report["DEEP_REID_STATUS"] == "NOT_CONFIGURED"
     json.dumps(report, allow_nan=False)
 

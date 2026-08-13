@@ -15,11 +15,13 @@ from slopecoach_ml.benchmark import (
     benchmark_real_pose_frames,
     benchmark_target_identity_frames,
     benchmark_video,
+    write_ground_truth_comparison,
 )
 from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
     OpenMMLabMMDetBackend,
 )
+from slopecoach_ml.identity import load_target_ground_truth, prepare_target_gt_template
 from slopecoach_ml.models import load_model_registry
 from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
 from slopecoach_ml.pose import render_debug_overlay
@@ -90,6 +92,14 @@ def build_parser() -> argparse.ArgumentParser:
     target_identity.add_argument("--debug-dir")
     target_identity.add_argument("--max-debug-frames", type=int, default=12)
     target_identity.add_argument("--input-non-mirrored", action="store_true")
+    target_identity.add_argument("--target-gt")
+    prepare_gt = subparsers.add_parser(
+        "prepare-target-gt", help="create an unlabeled manual target-GT review template"
+    )
+    prepare_gt.add_argument("video")
+    prepare_gt.add_argument("--sample-fps", type=float, default=5.0)
+    prepare_gt.add_argument("--output", required=True)
+    prepare_gt.add_argument("--review-dir")
     return parser
 
 
@@ -140,6 +150,15 @@ def _real_providers():
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "prepare-target-gt":
+        result = prepare_target_gt_template(
+            args.video,
+            sample_fps=args.sample_fps,
+            output_path=args.output,
+            review_dir=args.review_dir,
+        )
+        _write_json(result, None)
+        return 0
     if args.command == "pose-doctor":
         report = openmmlab_preflight()
         _write_json(report, None)
@@ -252,6 +271,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             warmup_frames = 1
         if args.command == "benchmark-target-identity":
+            target_ground_truth = (
+                load_target_ground_truth(args.target_gt, args.video) if args.target_gt else None
+            )
+            ground_truth_status = "NOT_AVAILABLE"
+            if target_ground_truth:
+                labeled = any(
+                    frame.target_state.value in {"PRESENT", "ABSENT"}
+                    for frame in target_ground_truth.frames
+                )
+                ground_truth_status = (
+                    "AVAILABLE" if labeled else "TEMPLATE_CREATED_REQUIRES_HUMAN_LABELING"
+                )
             debug_collector = TargetIdentityDebugCollector() if args.debug_dir else None
             report = benchmark_target_identity_frames(
                 input_path=args.video,
@@ -265,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
                 model_load=model_load,
                 warmup_frames=warmup_frames,
                 frame_observer=debug_collector.observe if debug_collector else None,
+                target_ground_truth=target_ground_truth,
+                ground_truth_status=ground_truth_status,
             )
             report["debug_artifacts"] = (
                 debug_collector.write(
@@ -275,6 +308,21 @@ def main(argv: list[str] | None = None) -> int:
                 if debug_collector
                 else {"selected_frame_indices": [], "overlay_paths": [], "contact_sheet": None}
             )
+            if (
+                target_ground_truth
+                and ground_truth_status == "AVAILABLE"
+                and debug_collector
+                and args.debug_dir
+            ):
+                report["debug_artifacts"].update(
+                    write_ground_truth_comparison(
+                        args.debug_dir,
+                        report["debug_artifacts"],
+                        report["frame_observations"],
+                        target_ground_truth,
+                        report.get("frame_gt_classifications", []),
+                    )
+                )
             _write_json(report, args.output)
             return 0
         debug_collector = RealPoseDebugCollector() if args.debug_dir else None

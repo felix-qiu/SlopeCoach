@@ -126,3 +126,100 @@ class TargetIdentityDebugCollector:
             "overlay_paths": paths,
             "contact_sheet": str(contact) if contact else None,
         }
+
+
+def write_ground_truth_comparison(
+    output_dir: str | Path,
+    debug_artifacts: dict[str, Any],
+    observations: list[dict[str, Any]],
+    ground_truth,
+    frame_classifications: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Add a separate GT/model comparison layer; never used to author Ground Truth."""
+    try:
+        import cv2
+    except ImportError as error:
+        raise RuntimeError("DEBUG_DEPENDENCY_MISSING: opencv-python") from error
+    destination = Path(output_dir) / "gt_comparison"
+    destination.mkdir(parents=True, exist_ok=True)
+    observations_by_frame = {item["frame_index"]: item for item in observations}
+    gt_by_timestamp = {item.timestamp_us: item for item in ground_truth.frames}
+    classification_by_timestamp = {item["timestamp_us"]: item for item in frame_classifications}
+    outputs = []
+    contact_entries = []
+    for source in debug_artifacts.get("overlay_paths", []):
+        frame_index = int(Path(source).stem.split("_")[-1])
+        observation = observations_by_frame.get(frame_index)
+        if observation is None:
+            continue
+        classification = classification_by_timestamp.get(observation["timestamp_us"])
+        if classification is None:
+            continue
+        gt_frame = gt_by_timestamp.get(classification["gt_timestamp_us"])
+        image = cv2.imread(source)
+        if image is None:
+            continue
+        if gt_frame and gt_frame.bbox:
+            box = gt_frame.bbox
+            cv2.rectangle(
+                image,
+                (round(box.x_px), round(box.y_px)),
+                (round(box.x_px + box.width_px), round(box.y_px + box.height_px)),
+                (255, 120, 0),
+                3,
+            )
+            cv2.putText(
+                image,
+                "GT",
+                (round(box.x_px), max(15, round(box.y_px) - 5)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 120, 0),
+                2,
+            )
+        label = classification["classification"]
+        iou = classification["selected_target_iou"]
+        cv2.putText(
+            image,
+            f"GT RESULT={label} IoU={iou if iou is not None else 'null'}",
+            (10, 48),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            1,
+        )
+        output = destination / Path(source).name
+        cv2.imwrite(str(output), image)
+        outputs.append(str(output))
+        priority = (
+            0
+            if label in {"WRONG_TARGET_LOCK", "TARGET_NOT_LOCKED", "FALSE_LOCK_WHEN_TARGET_ABSENT"}
+            else 1
+        )
+        contact_entries.append((priority, image))
+    contact = None
+    if contact_entries:
+        import numpy as np
+
+        tiles = []
+        for _, image in sorted(contact_entries, key=lambda item: item[0]):
+            width = 360
+            height = max(1, round(image.shape[0] * width / image.shape[1]))
+            tiles.append(cv2.resize(image, (width, height)))
+        row_height = max(tile.shape[0] for tile in tiles)
+        rows = []
+        for offset in range(0, len(tiles), 3):
+            row = [
+                cv2.copyMakeBorder(tile, 0, row_height - tile.shape[0], 0, 0, cv2.BORDER_CONSTANT)
+                for tile in tiles[offset : offset + 3]
+            ]
+            while len(row) < 3:
+                row.append(np.zeros_like(row[0]))
+            rows.append(cv2.hconcat(row))
+        contact = destination / "error_prioritized_contact_sheet.jpg"
+        if not cv2.imwrite(str(contact), cv2.vconcat(rows)):
+            raise RuntimeError("GT_COMPARISON_CONTACT_SHEET_WRITE_FAILED")
+    return {
+        "comparison_overlays": outputs,
+        "gt_error_prioritized_contact_sheet": str(contact) if contact else None,
+    }

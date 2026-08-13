@@ -54,6 +54,7 @@ class TargetIdentityManager:
         self.identity.last_seen_us = timestamp_us
         self.identity.velocity_x_px_per_s = track.velocity_x_px_per_s
         self.identity.velocity_y_px_per_s = track.velocity_y_px_per_s
+        self.identity.velocity_available = track.hit_count >= 2
         center = (
             track.bbox.x_px + track.bbox.width_px / 2,
             track.bbox.y_px + track.bbox.height_px / 2,
@@ -65,10 +66,14 @@ class TargetIdentityManager:
         self,
         track: TrackObservation,
         candidate: PersonCandidate,
+        timestamp_us: int,
         descriptor=None,
         pose_similarity: float | None = None,
     ) -> IdentityMatch:
         last = self.identity.last_bbox
+        if timestamp_us < 0:
+            raise ValueError("timestamp_us must be non-negative")
+        predicted_center = candidate_center = trajectory_distance = None
         if last is None:
             spatial = trajectory = scale = proportion = None
         else:
@@ -77,12 +82,34 @@ class TargetIdentityManager:
                 track.bbox.x_px + track.bbox.width_px / 2,
                 track.bbox.y_px + track.bbox.height_px / 2,
             )
+            candidate_center = center
             body_scale = max(1.0, math.hypot(last.width_px, last.height_px))
             distance = (
                 math.hypot(center[0] - last_center[0], center[1] - last_center[1]) / body_scale
             )
             spatial = max(0.0, 1 - distance / 2)
-            trajectory = max(0.0, 1 - distance)
+            if (
+                self.identity.last_seen_us is None
+                or timestamp_us < self.identity.last_seen_us
+                or not self.identity.trajectory_history
+                or not self.identity.velocity_available
+            ):
+                trajectory = None
+            else:
+                elapsed_us = min(
+                    timestamp_us - self.identity.last_seen_us,
+                    self.config.maximum_trajectory_prediction_us,
+                )
+                elapsed_seconds = elapsed_us / 1_000_000
+                predicted_center = (
+                    last_center[0] + self.identity.velocity_x_px_per_s * elapsed_seconds,
+                    last_center[1] + self.identity.velocity_y_px_per_s * elapsed_seconds,
+                )
+                trajectory_distance = (
+                    math.hypot(center[0] - predicted_center[0], center[1] - predicted_center[1])
+                    / body_scale
+                )
+                trajectory = max(0.0, 1 - trajectory_distance / 2)
             areas = (last.width_px * last.height_px, track.bbox.width_px * track.bbox.height_px)
             scale = min(areas) / max(areas)
             proportions = (
@@ -108,6 +135,9 @@ class TargetIdentityManager:
             candidate.quality_score,
             pose_similarity,
             candidate.quality_score,
+            predicted_center,
+            candidate_center,
+            trajectory_distance,
         )
         values = {
             "track": continuity,
@@ -156,6 +186,7 @@ class TargetIdentityManager:
             match = self._match(
                 active,
                 candidate,
+                timestamp_us,
                 (descriptors or {}).get(active.track_id),
                 (pose_similarities or {}).get(active.track_id),
             )
@@ -174,6 +205,7 @@ class TargetIdentityManager:
             match = self._match(
                 active,
                 candidate,
+                timestamp_us,
                 (descriptors or {}).get(active.track_id),
                 (pose_similarities or {}).get(active.track_id),
             )
@@ -215,6 +247,7 @@ class TargetIdentityManager:
                 self._match(
                     track,
                     candidate,
+                    timestamp_us,
                     (descriptors or {}).get(track.track_id),
                     (pose_similarities or {}).get(track.track_id),
                 )
