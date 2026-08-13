@@ -37,7 +37,7 @@ pose-smoke:
 
 benchmark-real-pose:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-real-pose VIDEO=/path/to/video' >&2; exit 2)
-	$(UV) run --project python python -m slopecoach_ml.cli benchmark-real-pose "$(VIDEO)" --input-non-mirrored
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-real-pose "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),2)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
 
 openmmlab-macos:
 	bash scripts/bootstrap_openmmlab_macos.sh

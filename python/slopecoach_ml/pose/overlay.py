@@ -47,6 +47,7 @@ def render_debug_overlay(
     output: str | Path,
     *,
     provider_name: str,
+    annotation: str | None = None,
     min_confidence: float = 0.3,
 ) -> None:
     try:
@@ -81,6 +82,16 @@ def render_debug_overlay(
         (255, 255, 255),
         1,
     )
+    if annotation:
+        cv2.putText(
+            canvas,
+            annotation,
+            (10, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            1,
+        )
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(destination), canvas):

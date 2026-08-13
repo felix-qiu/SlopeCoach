@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A2.1: Apple Silicon Real Pose Runtime**. The code in
+SlopeCoach is currently in **Phase A2.2: Real Ski Video Pose Validation**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -111,12 +111,25 @@ parses and validates the canonical pose, uses joint identity lookup, calculates
 `knee_angle_2d`, and serializes a provisional reference result. Tests use an explicit floating
 point tolerance and verify deterministic serialization.
 
-## Benchmark and artifacts
+## Real ski-video benchmark and artifacts
 
-`make benchmark` runs the golden benchmark. Real-video benchmark inputs are inspected using
-ffprobe and receive a real metadata/quality result. Because no real pose provider is configured,
-real-video output explicitly contains `pose_provider: "NOT_CONFIGURED"`; it never claims pose
-or biomechanics completion.
+`make benchmark` runs the deterministic Golden benchmark. The explicit local A2.2 path samples
+decoded timestamps, normalizes supported display rotation, runs the configured RTMDet-m and
+RTMW-L providers on CPU, adapts 133 joints to `COCO17_V1`, and records technical pose quality,
+raw temporal observations, 2D knee-angle coverage, failure reasons, and measured latency.
+
+```bash
+make benchmark-real-pose \
+  VIDEO=benchmarks/ski_bench/videos/example.mp4 \
+  SAMPLE_FPS=2 \
+  OUTPUT=artifacts/benchmarks/a2_2/example.json \
+  DEBUG_DIR=artifacts/debug/a2_2_real_ski/example
+```
+
+The command requires the isolated OpenMMLab environment and config/checkpoint variables
+documented below. Direct CLI use additionally supports `--max-debug-frames 0..10`. One warm-up
+sample is excluded from per-frame timing. P95 is `null` below 20 observations. Throughput is
+labeled sampled-pipeline throughput and is never presented as realtime or mobile FPS.
 
 Artifacts may be written under:
 
@@ -126,13 +139,16 @@ artifacts/benchmark.json
 artifacts/debug/
 ```
 
-The debug skeleton renderer is deferred. No expert-labeled ground truth is present, so
-`REAL_GT_STATUS = NOT_AVAILABLE` and diagnosis precision, recall, and F1 remain JSON `null`.
+Representative canonical overlays and a contact sheet can be written under the debug directory;
+the harness deliberately does not dump every frame. No expert-labeled ground truth is present,
+so `REAL_GT_STATUS = NOT_AVAILABLE` and diagnosis precision, recall, and F1 remain JSON `null`.
 
 Benchmark inputs are explicitly classified as `GOLDEN_FIXTURE`, `SYNTHETIC_METADATA_SMOKE`, or
 `REAL_VIDEO`. Synthetic ffprobe integration media must never be reported as a real ski-video
-benchmark. No user-provided real ski video was available in Phase A1.1, so
-`REAL_VIDEO_BENCHMARK = NOT_EXECUTED_NO_REAL_VIDEO_INPUT`.
+benchmark. Real user videos are local-only inputs. `benchmarks/ski_bench/videos/` and
+`fixtures/real/` are
+ignored, are never required by pytest or CI, and must not be committed. Generated benchmark JSON,
+overlays, OpenMMLab source, environments, and weights stay under ignored `artifacts/`.
 
 ## Target safety and CI
 
@@ -214,12 +230,14 @@ Target Identity remains unavailable: detections are observations, not tracks or 
 Multi-person frames retain every pose but return null target biomechanics. Real-pose benchmarks
 measure coverage, confidence, coordinate visibility, and latency—not diagnosis accuracy.
 
-No user-provided ski video currently exists in documented benchmark locations, so
-`REAL_VIDEO_BENCHMARK = NOT_EXECUTED_NO_REAL_VIDEO_INPUT`. The local OpenMMLab runtime and weights
-must pass `pose-doctor` before real inference may be claimed READY.
+Phase A2.2 validates a user-provided local ski clip without making it a repository fixture. The
+local OpenMMLab runtime and weights must pass `pose-doctor` before any real inference may be
+claimed READY. Per-frame observations are not Track IDs, multi-person frames never select a
+target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
+evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
-the production Rust Domain Kernel, real tracking/identity/ReID/temporal/turn/diagnosis
+Not implemented in Phase A2.2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+the production Rust Domain Kernel, tracking/Target Identity/ReID, temporal smoothing, turn/diagnosis
 pipelines, LLMs, QNN, TensorRT, physical 3D edge angle, live camera coaching, complex UI, or
 first-party C++. Mobile integration and the Rust production implementation are explicitly
 deferred.

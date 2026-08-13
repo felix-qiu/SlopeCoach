@@ -8,7 +8,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from slopecoach_ml.benchmark import benchmark_golden, benchmark_real_pose_frames, benchmark_video
+from slopecoach_ml.benchmark import (
+    RealPoseDebugCollector,
+    benchmark_golden,
+    benchmark_real_pose_frames,
+    benchmark_video,
+)
 from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
     OpenMMLabMMDetBackend,
@@ -71,6 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
     real_video.add_argument("video")
     real_video.add_argument("--sample-fps", type=float, default=2.0)
     real_video.add_argument("--output")
+    real_video.add_argument("--debug-dir")
+    real_video.add_argument("--max-debug-frames", type=int, default=10)
     real_video.add_argument("--input-non-mirrored", action="store_true")
     return parser
 
@@ -207,8 +214,32 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(
                 "MIRROR_STATE_UNRESOLVED: pass --input-non-mirrored to attest input state"
             )
-        detector, pose_provider, device, _model_load = _real_providers()
+        if args.max_debug_frames < 0 or args.max_debug_frames > 10:
+            raise ValueError("max-debug-frames must be in [0, 10]")
+        detector, pose_provider, device, model_load = _real_providers()
         registry = load_model_registry(_root() / "models/registry.json")
+        sampler = OpenCVVideoSampler(args.video, sample_fps=args.sample_fps)
+        warmup_frames = 0
+        warmup_iterator = iter(sampler)
+        try:
+            warmup = next(warmup_iterator)
+        except StopIteration:
+            warmup = None
+        finally:
+            close = getattr(warmup_iterator, "close", None)
+            if close:
+                close()
+        if warmup is not None:
+            warmup_detections = detector.detect(warmup.image, warmup.geometry)
+            pose_provider.estimate_detections(
+                warmup.image,
+                warmup_detections,
+                warmup.geometry,
+                timestamp_us=warmup.timestamp_us,
+                frame_index=warmup.frame_index,
+            )
+            warmup_frames = 1
+        debug_collector = RealPoseDebugCollector() if args.debug_dir else None
         report = benchmark_real_pose_frames(
             input_path=args.video,
             input_kind="REAL_VIDEO",
@@ -218,7 +249,26 @@ def main(argv: list[str] | None = None) -> int:
             detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
             pose_model=registry["rtmw-l-cocktail14-256x192"].to_dict(),
             device=device,
+            sample_fps=args.sample_fps,
+            model_load=model_load,
+            warmup_frames=warmup_frames,
+            frame_observer=debug_collector.observe if debug_collector else None,
         )
+        if debug_collector:
+            started = time.perf_counter()
+            report["debug_artifacts"] = debug_collector.write(
+                args.debug_dir,
+                report["frame_observations"],
+                provider_name=pose_provider.name,
+                max_frames=args.max_debug_frames,
+            )
+            report["performance"]["overlay_seconds"] = time.perf_counter() - started
+        else:
+            report["debug_artifacts"] = {
+                "selected_frame_indices": [],
+                "overlay_paths": [],
+                "contact_sheet": None,
+            }
         _write_json(report, args.output)
         return 0
     if args.command == "golden":

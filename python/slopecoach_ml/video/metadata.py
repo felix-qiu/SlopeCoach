@@ -18,6 +18,12 @@ class VideoMetadata:
     height_px: int | None
     usable_frame_ratio: float | None = None
     error: str | None = None
+    container: str | None = None
+    codec: str | None = None
+    nominal_fps: float | None = None
+    average_fps: float | None = None
+    pixel_aspect_ratio: float | None = None
+    rotation_degrees: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -26,7 +32,8 @@ class VideoMetadata:
 def _parse_rate(value: str | None) -> float | None:
     if not value or value == "0/0":
         return None
-    numerator, separator, denominator = value.partition("/")
+    normalized = value.replace(":", "/")
+    numerator, separator, denominator = normalized.partition("/")
     try:
         result = float(numerator) / float(denominator) if separator else float(value)
     except (ValueError, ZeroDivisionError):
@@ -46,7 +53,9 @@ def inspect_video(path: str | Path, *, ffprobe: str = "ffprobe") -> VideoMetadat
         "v:0",
         "-count_frames",
         "-show_entries",
-        "stream=width,height,nb_read_frames,nb_frames,avg_frame_rate,duration:format=duration",
+        "stream=width,height,codec_name,nb_read_frames,nb_frames,r_frame_rate,avg_frame_rate,"
+        "sample_aspect_ratio,duration:stream_tags=rotate:stream_side_data=rotation:"
+        "format=format_name,duration",
         "-of",
         "json",
         str(video_path),
@@ -86,8 +95,35 @@ def inspect_video(path: str | Path, *, ffprobe: str = "ffprobe") -> VideoMetadat
             frame_count = round(duration * frame_rate) if frame_rate is not None else None
         if duration is not None and not math.isfinite(duration):
             duration = None
+        nominal_fps = _parse_rate(stream.get("r_frame_rate"))
+        average_fps = _parse_rate(stream.get("avg_frame_rate"))
+        par = _parse_rate(stream.get("sample_aspect_ratio"))
+        rotation = None
+        rotation_values = [stream.get("tags", {}).get("rotate")]
+        rotation_values.extend(item.get("rotation") for item in stream.get("side_data_list", []))
+        for value in rotation_values:
+            if value is not None:
+                rotation = int(round(float(value))) % 360
+                break
+        if rotation is None:
+            rotation = 0
+        container = payload.get("format", {}).get("format_name")
+        codec = stream.get("codec_name")
     except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         return VideoMetadata(
             str(video_path), False, None, None, None, None, error=f"invalid ffprobe output: {error}"
         )
-    return VideoMetadata(str(video_path), True, duration, frame_count, width, height)
+    return VideoMetadata(
+        str(video_path),
+        True,
+        duration,
+        frame_count,
+        width,
+        height,
+        container=container,
+        codec=codec,
+        nominal_fps=nominal_fps,
+        average_fps=average_fps,
+        pixel_aspect_ratio=par,
+        rotation_degrees=rotation,
+    )
