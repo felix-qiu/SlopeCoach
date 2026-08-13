@@ -1,0 +1,25 @@
+{
+  "clips": [
+    {
+      "clip_id": "example_clip",
+      "enabled": false,
+      "expected_sha256": null,
+      "manual_tags": {
+        "camera_motion": "UNKNOWN",
+        "camera_view": "UNKNOWN",
+        "crowding": "UNKNOWN",
+        "motion_note": "Enable only after human dataset selection.",
+        "occlusion": "UNKNOWN",
+        "subject_distance": "UNKNOWN"
+      },
+      "mirror_policy": "NON_MIRRORED",
+      "observed_engineering_metrics": {},
+      "path": "benchmarks/ski_bench/videos/example_clip.mp4",
+      "sample_fps": 5.0,
+      "source_video_id": "example_clip"
+    }
+  ],
+  "contract_version": "biomechanics-real-dataset-v1",
+  "dataset_id": "example-biomechanics-dataset",
+  "description": "Tracked template only. Real videos and enabled local manifests remain ignored."
+}

@@ -1,6 +1,14 @@
 from .biomechanics_debug import write_biomechanics_debug_artifacts
 from .biomechanics_features import benchmark_biomechanics_frames
 from .harness import benchmark_golden, benchmark_video
+from .real_dataset import (
+    BiomechanicsDatasetValidationConfig,
+    RealDatasetManifest,
+    aggregate_biomechanics_dataset,
+    execute_biomechanics_dataset,
+    load_real_dataset_manifest,
+    prepare_real_dataset_manifest,
+)
 from .real_pose import (
     RealPoseDebugCollector,
     benchmark_real_pose_frames,
@@ -17,9 +25,12 @@ from .temporal_turns import TemporalTurnCollector, benchmark_temporal_turns_fram
 
 __all__ = [
     "RealPoseDebugCollector",
+    "BiomechanicsDatasetValidationConfig",
+    "RealDatasetManifest",
     "TargetIdentityDebugCollector",
     "TemporalTurnCollector",
     "benchmark_golden",
+    "aggregate_biomechanics_dataset",
     "benchmark_biomechanics_frames",
     "benchmark_real_pose_frames",
     "benchmark_target_identity_frames",
@@ -29,5 +40,8 @@ __all__ = [
     "select_target_debug_indices",
     "write_ground_truth_comparison",
     "benchmark_video",
+    "execute_biomechanics_dataset",
+    "load_real_dataset_manifest",
+    "prepare_real_dataset_manifest",
     "select_debug_frame_indices",
 ]

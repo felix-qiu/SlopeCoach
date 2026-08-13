@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A5.1: Biomechanics Schema & Turn-Fact Hardening**. The code in
+SlopeCoach is currently in **Phase A5.2: Real Motion Coverage & Feature Robustness**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -207,6 +207,40 @@ known boundary and signal run, and break equal-distance ties toward the earlier 
 Single-source turn facts preserve source joint evidence; two-source deltas use minimum confidence
 and unique-joint support without double-counting observations. Turn-segment-derived duration and
 peak proxy do not claim joint support confidence.
+
+## A5.2 real-motion dataset robustness
+
+A5.2 keeps the exact `biomechanics-feature-schema-v1` registry and formulas unchanged. It adds the
+local-only `biomechanics-real-dataset-v1` manifest and
+`ski-bench-biomechanics-dataset-v1` report to measure evidence availability across independent
+`source_video_id` values. Temporal slices from one source never inflate the independent-video
+count. Newly discovered videos default disabled; only the already established `ski_test_001` clip
+may be enabled automatically by the local template-preparation policy.
+
+Dataset output reports frame macro/clip-weighted and micro/frame-weighted coverage separately,
+temporal facts per eligible segment, and turn facts per eligible turn. Zero-trusted-target clips
+are classified as upstream non-evaluable and excluded from feature robustness denominators. The
+failure matrix, mathematical domain checks, identity lock, target bbox ratios, candidate density,
+joint visibility, and motion signal summaries are engineering covariates—not labels or accuracy.
+
+```bash
+make prepare-biomechanics-dataset \
+  VIDEO_DIR=benchmarks/ski_bench/videos \
+  OUTPUT=artifacts/manifests/biomechanics_real.local.json
+
+make benchmark-biomechanics-dataset \
+  MANIFEST=artifacts/manifests/biomechanics_real.local.json \
+  OUTPUT=artifacts/benchmarks/a5_2/dataset_report.json \
+  CLIP_OUTPUT_DIR=artifacts/benchmarks/a5_2/clips \
+  DEBUG_DIR=artifacts/debug/a5_2_biomechanics
+```
+
+Enabled clips execute sequentially. Per-clip failures remain explicit instead of being silently
+discarded. Five independent videos is a project engineering-evidence threshold, not statistical
+proof; ten or more varied clips are preferred before feature-retention research decisions.
+`HIGH_FEATURE_COVERAGE_DOES_NOT_IMPLY_ACCURACY`: coverage cannot validate physical correctness,
+biomechanics accuracy, diagnosis, or coaching. The ML feature vector remains `NOT_FROZEN`, and no
+feature is automatically deleted.
 
 All measurements remain image-space 2D and camera/viewpoint dependent. No output is a physical
 center of mass, physical edge angle, diagnosis, technique classification, or score. Run:

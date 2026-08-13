@@ -18,6 +18,9 @@ from slopecoach_ml.benchmark import (
     benchmark_target_identity_frames,
     benchmark_temporal_turns_frames,
     benchmark_video,
+    execute_biomechanics_dataset,
+    load_real_dataset_manifest,
+    prepare_real_dataset_manifest,
     write_biomechanics_debug_artifacts,
     write_ground_truth_comparison,
     write_temporal_debug_artifacts,
@@ -147,6 +150,18 @@ def build_parser() -> argparse.ArgumentParser:
     biomechanics.add_argument("--debug-dir")
     biomechanics.add_argument("--max-debug-frames", type=int, default=12)
     biomechanics.add_argument("--input-non-mirrored", action="store_true")
+    prepare_dataset = subparsers.add_parser(
+        "prepare-biomechanics-dataset", help="prepare a local-only A5.2 real-video manifest"
+    )
+    prepare_dataset.add_argument("--video-dir", required=True)
+    prepare_dataset.add_argument("--output", required=True)
+    dataset = subparsers.add_parser(
+        "benchmark-biomechanics-dataset", help="run sequential A5.2 dataset robustness benchmark"
+    )
+    dataset.add_argument("manifest")
+    dataset.add_argument("--output", required=True)
+    dataset.add_argument("--per-clip-output-dir", required=True)
+    dataset.add_argument("--debug-dir")
     return parser
 
 
@@ -197,6 +212,87 @@ def _real_providers():
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "prepare-biomechanics-dataset":
+        result = prepare_real_dataset_manifest(args.video_dir, args.output)
+        _write_json(result, None)
+        return 0
+    if args.command == "benchmark-biomechanics-dataset":
+        manifest = load_real_dataset_manifest(args.manifest)
+        registry = load_model_registry(_root() / "models/registry.json")
+        providers = {}
+
+        def benchmark_clip(clip, path, debug_path):
+            if not providers:
+                detector, pose_provider, device, model_load = _real_providers()
+                providers.update(
+                    detector=detector,
+                    pose_provider=pose_provider,
+                    device=device,
+                    model_load=model_load,
+                )
+            detector = providers["detector"]
+            pose_provider = providers["pose_provider"]
+            device = providers["device"]
+            model_load = providers["model_load"]
+            collector = TemporalTurnCollector(keep_images=bool(debug_path))
+            sampler = OpenCVVideoSampler(path, sample_fps=clip.sample_fps)
+            warmup_iterator = iter(sampler)
+            try:
+                warmup = next(warmup_iterator)
+            except StopIteration:
+                warmup = None
+            finally:
+                close = getattr(warmup_iterator, "close", None)
+                if close:
+                    close()
+            warmup_frames = 0
+            if warmup is not None:
+                detections = detector.detect(warmup.image, warmup.geometry)
+                pose_provider.estimate_detections(
+                    warmup.image,
+                    detections,
+                    warmup.geometry,
+                    timestamp_us=warmup.timestamp_us,
+                    frame_index=warmup.frame_index,
+                )
+                warmup_frames = 1
+            identity_template = (
+                _root() / "benchmarks/ski_bench/annotations" / f"{path.stem}.target.json"
+            )
+            report = benchmark_biomechanics_frames(
+                input_path=path,
+                frames=OpenCVVideoSampler(path, sample_fps=clip.sample_fps),
+                detector=detector,
+                pose_provider=pose_provider,
+                detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
+                pose_model=registry["rtmw-l-cocktail14-256x192"].to_dict(),
+                device=device,
+                sample_fps=clip.sample_fps,
+                model_load=model_load,
+                warmup_frames=warmup_frames,
+                collector=collector,
+                target_identity_gt_status=(
+                    "TEMPLATE_CREATED_REQUIRES_HUMAN_LABELING"
+                    if identity_template.is_file()
+                    else "NOT_AVAILABLE"
+                ),
+            )
+            report["debug_artifacts"] = (
+                write_biomechanics_debug_artifacts(debug_path, report, collector)
+                if debug_path
+                else {}
+            )
+            report.pop("_upstream_debug_report", None)
+            return report
+
+        result = execute_biomechanics_dataset(
+            manifest,
+            benchmark_clip,
+            per_clip_output_dir=args.per_clip_output_dir,
+            debug_dir=args.debug_dir,
+        )
+        _write_json(result, args.output)
+        return 0
     if args.command == "temporal-golden":
         result = run_temporal_golden(args.fixture)
         _write_json(result, args.output)

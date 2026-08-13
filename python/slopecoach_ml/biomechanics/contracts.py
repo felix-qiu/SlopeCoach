@@ -154,7 +154,7 @@ class FeatureAggregate:
             raise ValueError("feature_id must be a non-empty string")
         if not isinstance(self.unit, str) or not self.unit.strip():
             raise ValueError("unit must be a non-empty string")
-        _optional_integer(self.temporal_segment_id, "temporal_segment_id", minimum=1)
+        _required_integer(self.temporal_segment_id, "temporal_segment_id", minimum=1)
         for name in (
             "sample_count",
             "available_count",
@@ -171,6 +171,19 @@ class FeatureAggregate:
             raise ValueError("aggregate evidence counts must not exceed available_count")
         for name in ("support_ratio", "observed_only_ratio", "interpolated_support_ratio"):
             _ratio(getattr(self, name), name)
+        denominator = self.sample_count
+        expected_ratios = {
+            "support_ratio": self.available_count / denominator if denominator else 0.0,
+            "observed_only_ratio": (
+                self.observed_only_sample_count / denominator if denominator else 0.0
+            ),
+            "interpolated_support_ratio": (
+                self.interpolated_support_sample_count / denominator if denominator else 0.0
+            ),
+        }
+        for name, expected in expected_ratios.items():
+            if not math.isclose(getattr(self, name), expected, rel_tol=1e-12, abs_tol=1e-12):
+                raise ValueError(f"{name} is inconsistent with aggregate counts")
         _optional_ratio(self.median_support_confidence, "median_support_confidence")
         statistics = (self.median, self.minimum, self.maximum, self.range)
         if self.status is BiomechanicsFactStatus.AVAILABLE:
@@ -187,6 +200,13 @@ class FeatureAggregate:
                 raise ValueError("aggregate statistics must satisfy minimum <= median <= maximum")
             if self.range < 0:
                 raise ValueError("aggregate range must be non-negative")
+            if not math.isclose(
+                self.range,
+                self.maximum - self.minimum,
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            ):
+                raise ValueError("aggregate range must equal maximum - minimum")
         elif self.status is BiomechanicsFactStatus.INSUFFICIENT_SAMPLES:
             if any(value is not None for value in statistics):
                 raise ValueError("insufficient aggregate statistics must be null")
@@ -208,8 +228,8 @@ class TurnBiomechanicsResult:
     def __post_init__(self) -> None:
         if not isinstance(self.turn_id, str) or not self.turn_id.strip():
             raise ValueError("turn_id must be a non-empty string")
-        _optional_integer(self.temporal_segment_id, "temporal_segment_id", minimum=1)
-        _optional_integer(self.signal_run_id, "signal_run_id", minimum=1)
+        _required_integer(self.temporal_segment_id, "temporal_segment_id", minimum=1)
+        _required_integer(self.signal_run_id, "signal_run_id", minimum=1)
         feature_ids = []
         for fact in self.facts:
             if fact.scope is not BiomechanicsFactScope.TURN:
@@ -305,6 +325,11 @@ def _optional_integer(value: int | None, name: str, *, minimum: int) -> None:
         isinstance(value, bool) or not isinstance(value, int) or value < minimum
     ):
         raise ValueError(f"{name} must be null or an integer >= {minimum}")
+
+
+def _required_integer(value: int, name: str, *, minimum: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
 
 
 def _count(value: int, name: str) -> None:

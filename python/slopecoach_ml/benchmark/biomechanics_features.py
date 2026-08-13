@@ -157,6 +157,19 @@ def benchmark_biomechanics_frames(
         "video": upstream["video"],
         "sampling": upstream["sampling"],
         "identity_input": upstream["identity_input"],
+        "upstream_conditions": {
+            **upstream["upstream_conditions"],
+            "required_joint_visibility_ratio": (
+                sum(
+                    fact.status.value
+                    not in {"REQUIRED_JOINT_MISSING", "REQUIRED_JOINT_OUT_OF_FRAME"}
+                    for fact in result.frame_facts
+                )
+                / len(result.frame_facts)
+                if result.frame_facts
+                else None
+            ),
+        },
         "temporal_input": {
             "temporal_segment_count": temporal.temporal_segment_count,
         },
@@ -165,6 +178,8 @@ def benchmark_biomechanics_frames(
             "qualified_turn_count": len(result.turn_features),
             "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE",
         },
+        "turn_signal_summary": upstream["turn_signal"],
+        "turn_segments": upstream["turn_segments"],
         "frame_biomechanics": {
             "trusted_frame_count": trusted,
             "feature_coverage": result.feature_coverage,

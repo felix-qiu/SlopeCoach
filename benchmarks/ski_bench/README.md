@@ -110,6 +110,21 @@ facts for partial turns, and propagates conservative source evidence. Matching i
 inside all known boundaries, and deterministically prefers an earlier timestamp on equal distance.
 The ML vector remains `NOT_FROZEN`; no diagnosis or score is produced.
 
+Phase A5.2 adds the tracked disabled template
+`manifests/biomechanics_real.example.json`; actual manifests remain local under ignored
+`artifacts/manifests/`. The `prepare-biomechanics-dataset` command scans only the designated
+directory, accepts `.mp4`, `.mov`, and `.m4v`, computes provenance SHA256, and never auto-enables
+unknown clips. `source_video_id`, not clip rows or subclips, defines independent-source evidence.
+
+The sequential `benchmark-biomechanics-dataset` command preserves each complete A5.1 report,
+isolates clip failures, and writes macro/micro frame coverage, segment-based temporal coverage,
+turn-based coverage, failure matrices, mathematical domain checks, CSV matrices, performance, and
+strict-null GT status. A single real source honestly reports
+`INSUFFICIENT_DATASET_SINGLE_CLIP`; 2–4 sources report `LIMITED_MULTICLIP_EVIDENCE`; five or more
+report project-level `MULTICLIP_ENGINEERING_EVIDENCE`. These levels are engineering governance,
+not statistical generalization or accuracy evidence. No diagnosis, score, feature tuning, or
+automatic schema deletion occurs.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
+from statistics import mean, median
 from typing import Any
 
 from slopecoach_ml.identity import TargetIdentityState
@@ -139,6 +140,18 @@ def benchmark_temporal_turns_frames(
     real_turn_status = classify_real_turn_status(diagnostics, segments)
     no_peak_reason = no_qualified_candidate_reason(real_turn_status, diagnostics, turn_settings)
     locked = sum(sample.identity_state is TargetIdentityState.LOCKED for sample in sink.samples)
+    trusted_bbox_height_ratios = []
+    trusted_bbox_area_ratios = []
+    for observation in identity_report["frame_observations"]:
+        bbox = observation.get("selected_bbox")
+        if observation["identity_state"] != "LOCKED" or bbox is None:
+            continue
+        width = identity_report["video"].get("width_px")
+        height = identity_report["video"].get("height_px")
+        if not width or not height:
+            continue
+        trusted_bbox_height_ratios.append(bbox["height_px"] / height)
+        trusted_bbox_area_ratios.append(bbox["width_px"] * bbox["height_px"] / (width * height))
     signal_engineering_status = (
         "NOT_ANALYZABLE"
         if real_turn_status.value.startswith("NOT_ANALYZABLE_")
@@ -164,6 +177,34 @@ def benchmark_temporal_turns_frames(
             "target_identity_accuracy_status": "UNKNOWN",
             "identity_locked_frame_count": locked,
             "identity_unsafe_frame_count": len(sink.samples) - locked,
+        },
+        "upstream_conditions": {
+            "raw_detection_count": identity_report["detections"]["raw_detection_person_count"],
+            "raw_candidate_density": identity_report["detections"]["mean_raw_detections_per_frame"],
+            "mean_target_bbox_height_ratio": mean(trusted_bbox_height_ratios)
+            if trusted_bbox_height_ratios
+            else None,
+            "median_target_bbox_height_ratio": median(trusted_bbox_height_ratios)
+            if trusted_bbox_height_ratios
+            else None,
+            "minimum_target_bbox_height_ratio": min(trusted_bbox_height_ratios)
+            if trusted_bbox_height_ratios
+            else None,
+            "maximum_target_bbox_height_ratio": max(trusted_bbox_height_ratios)
+            if trusted_bbox_height_ratios
+            else None,
+            "mean_target_bbox_area_ratio": mean(trusted_bbox_area_ratios)
+            if trusted_bbox_area_ratios
+            else None,
+            "median_target_bbox_area_ratio": median(trusted_bbox_area_ratios)
+            if trusted_bbox_area_ratios
+            else None,
+            "minimum_target_bbox_area_ratio": min(trusted_bbox_area_ratios)
+            if trusted_bbox_area_ratios
+            else None,
+            "maximum_target_bbox_area_ratio": max(trusted_bbox_area_ratios)
+            if trusted_bbox_area_ratios
+            else None,
         },
         "temporal_pose": {
             "temporal_segment_count": temporal.temporal_segment_count,
