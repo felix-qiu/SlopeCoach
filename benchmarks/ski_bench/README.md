@@ -49,3 +49,20 @@ make prepare-target-gt VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 \
 
 Human-labeling review frames contain only the source image, timestamp, and frame index. Separate
 `gt_comparison/` model overlays are produced only when a reviewed GT file is evaluated.
+
+Phase A4 adds `benchmark-temporal-turns`. It reuses the A3 identity manager and target-focused pose
+scheduling before applying timestamp-driven short-gap interpolation, per-joint One Euro filtering,
+an image-space signed lower-body proxy, and provisional peak/zero-crossing segmentation. Identity
+uncertainty is always a hard temporal boundary; no gap is filled across it. Raw model pose and
+interpolated/stabilized evidence stay distinguishable.
+
+```bash
+make benchmark-temporal-turns \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a4/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a4_temporal_turns/ski_test_001_5fps
+```
+
+The signed proxy is `IMAGE_SPACE_2D_PROXY_ONLY`; phase sign is not skiing left/right and no output
+is physical edge angle or diagnosis. The current target template must remain `UNLABELED` during
+A4. `TURN_SEGMENTATION_GT_STATUS = NOT_AVAILABLE`, and turn precision, recall, and F1 stay null.

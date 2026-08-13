@@ -34,3 +34,7 @@ jobs:
         run: uv run --project python python -m slopecoach_ml.cli golden
       - name: Golden benchmark
         run: uv run --project python python -m slopecoach_ml.cli benchmark fixtures/golden_pose_001.json
+      - name: Temporal pose Golden
+        run: uv run --project python python -m slopecoach_ml.cli temporal-golden
+      - name: Turn signal Golden
+        run: uv run --project python python -m slopecoach_ml.cli turn-golden

@@ -11,11 +11,14 @@ from typing import Any
 from slopecoach_ml.benchmark import (
     RealPoseDebugCollector,
     TargetIdentityDebugCollector,
+    TemporalTurnCollector,
     benchmark_golden,
     benchmark_real_pose_frames,
     benchmark_target_identity_frames,
+    benchmark_temporal_turns_frames,
     benchmark_video,
     write_ground_truth_comparison,
+    write_temporal_debug_artifacts,
 )
 from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
@@ -33,6 +36,7 @@ from slopecoach_ml.reference import (
     analyze_pose_frame,
     load_golden_fixture,
 )
+from slopecoach_ml.temporal import run_temporal_golden, run_turn_golden
 from slopecoach_ml.video import OpenCVVideoSampler, inspect_video
 
 
@@ -100,6 +104,29 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_gt.add_argument("--sample-fps", type=float, default=5.0)
     prepare_gt.add_argument("--output", required=True)
     prepare_gt.add_argument("--review-dir")
+    temporal_golden = subparsers.add_parser(
+        "temporal-golden", help="run deterministic A4 temporal pose Golden"
+    )
+    temporal_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_temporal_pose_001.json")
+    )
+    temporal_golden.add_argument("--output")
+    turn_golden = subparsers.add_parser(
+        "turn-golden", help="run deterministic A4 turn signal Golden"
+    )
+    turn_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_turn_signal_001.json")
+    )
+    turn_golden.add_argument("--output")
+    temporal_turns = subparsers.add_parser(
+        "benchmark-temporal-turns", help="run A4 temporal pose and turn benchmark"
+    )
+    temporal_turns.add_argument("video")
+    temporal_turns.add_argument("--sample-fps", type=float, default=5.0)
+    temporal_turns.add_argument("--output")
+    temporal_turns.add_argument("--debug-dir")
+    temporal_turns.add_argument("--max-debug-frames", type=int, default=12)
+    temporal_turns.add_argument("--input-non-mirrored", action="store_true")
     return parser
 
 
@@ -150,6 +177,14 @@ def _real_providers():
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "temporal-golden":
+        result = run_temporal_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "turn-golden":
+        result = run_turn_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
         result = prepare_target_gt_template(
             args.video,
@@ -239,7 +274,11 @@ def main(argv: list[str] | None = None) -> int:
         }
         _write_json(payload, args.output)
         return 0
-    if args.command in {"benchmark-real-pose", "benchmark-target-identity"}:
+    if args.command in {
+        "benchmark-real-pose",
+        "benchmark-target-identity",
+        "benchmark-temporal-turns",
+    }:
         if not args.input_non_mirrored:
             raise RuntimeError(
                 "MIRROR_STATE_UNRESOLVED: pass --input-non-mirrored to attest input state"
@@ -323,6 +362,48 @@ def main(argv: list[str] | None = None) -> int:
                         report.get("frame_gt_classifications", []),
                     )
                 )
+            _write_json(report, args.output)
+            return 0
+        if args.command == "benchmark-temporal-turns":
+            collector = TemporalTurnCollector(keep_images=bool(args.debug_dir))
+            identity_template = (
+                _root()
+                / "benchmarks/ski_bench/annotations"
+                / f"{Path(args.video).stem}.target.json"
+            )
+            identity_gt_status = (
+                "TEMPLATE_CREATED_REQUIRES_HUMAN_LABELING"
+                if identity_template.is_file()
+                else "NOT_AVAILABLE"
+            )
+            report = benchmark_temporal_turns_frames(
+                input_path=args.video,
+                frames=OpenCVVideoSampler(args.video, sample_fps=args.sample_fps),
+                detector=detector,
+                pose_provider=pose_provider,
+                detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
+                pose_model=registry["rtmw-l-cocktail14-256x192"].to_dict(),
+                device=device,
+                sample_fps=args.sample_fps,
+                model_load=model_load,
+                warmup_frames=warmup_frames,
+                collector=collector,
+                target_identity_gt_status=identity_gt_status,
+            )
+            report["debug_artifacts"] = (
+                write_temporal_debug_artifacts(
+                    args.debug_dir, report, collector, max_frames=args.max_debug_frames
+                )
+                if args.debug_dir
+                else {
+                    "selected_frame_indices": [],
+                    "overlay_paths": [],
+                    "contact_sheet": None,
+                    "temporal_trace": None,
+                    "turn_signal": None,
+                    "turn_events": None,
+                }
+            )
             _write_json(report, args.output)
             return 0
         debug_collector = RealPoseDebugCollector() if args.debug_dir else None

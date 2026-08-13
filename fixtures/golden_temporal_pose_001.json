@@ -1,0 +1,36 @@
+{
+  "contract_version": "golden-temporal-pose-v1",
+  "frame_geometry": {
+    "width_px": 640,
+    "height_px": 480,
+    "pixel_aspect_ratio": 1.0,
+    "coordinate_space": "SourcePixel2D",
+    "orientation": "CanonicalUpright",
+    "mirrored": false
+  },
+  "config": {
+    "minimum_joint_confidence": 0.3,
+    "minimum_identity_confidence": 0.62,
+    "maximum_interpolation_gap_us": 250000,
+    "hard_reset_gap_us": 500000,
+    "one_euro_min_cutoff_hz": 1.0,
+    "one_euro_beta": 0.0,
+    "one_euro_derivative_cutoff_hz": 1.0
+  },
+  "samples": [
+    {"timestamp_us": 0, "frame_index": 0, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": {"x_px": 98, "y_px": 300, "confidence": 0.9}, "truth_x_px": 100},
+    {"timestamp_us": 90000, "frame_index": 3, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": null, "truth_x_px": 100},
+    {"timestamp_us": 200000, "frame_index": 6, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": {"x_px": 102, "y_px": 300, "confidence": 0.8}, "truth_x_px": 100},
+    {"timestamp_us": 300000, "frame_index": 9, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": {"x_px": 98, "y_px": 300, "confidence": 0.9}, "truth_x_px": 100},
+    {"timestamp_us": 400000, "frame_index": 12, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": null, "truth_x_px": 100},
+    {"timestamp_us": 500000, "frame_index": 15, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": null, "truth_x_px": 100},
+    {"timestamp_us": 700000, "frame_index": 21, "active_track_id": 1, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": {"x_px": 102, "y_px": 300, "confidence": 0.9}, "truth_x_px": 100},
+    {"timestamp_us": 800000, "frame_index": 24, "active_track_id": 1, "identity_state": "SUSPECT", "identity_confidence": 0.5, "joint": {"x_px": 102, "y_px": 300, "confidence": 0.9}, "truth_x_px": 100},
+    {"timestamp_us": 900000, "frame_index": 27, "active_track_id": 2, "identity_state": "LOCKED", "identity_confidence": 0.9, "joint": {"x_px": 98, "y_px": 300, "confidence": 0.9}, "truth_x_px": 100}
+  ],
+  "expected": {
+    "temporal_segment_count": 2,
+    "short_interpolated_count": 1,
+    "long_missing_timestamps_us": [400000, 500000]
+  }
+}

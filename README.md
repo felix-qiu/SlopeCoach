@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A3.1: Target Identity Benchmark Hardening**. The code in
+SlopeCoach is currently in **Phase A4: Temporal Pose + Turn Foundation**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -34,6 +34,8 @@ python/slopecoach_ml/       Research/reference package
   quality/                  READY/PARTIAL_ANALYSIS/NOT_ANALYZABLE gate
   detection/, pose/         Provider interfaces, mocks, canonical pose contract
   biomechanics/             2D knee-angle reference slice
+  temporal/                 Identity-safe interpolation and One Euro stabilization
+  turns/                    Image-space proxy, extrema, crossings and provisional segments
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -97,6 +99,8 @@ uv run --project python python -m slopecoach_ml.cli golden
 uv run --project python python -m slopecoach_ml.cli inspect-video /path/to/video.mp4
 uv run --project python python -m slopecoach_ml.cli benchmark fixtures/golden_pose_001.json
 uv run --project python python -m slopecoach_ml.cli benchmark /path/to/video.mp4
+uv run --project python python -m slopecoach_ml.cli temporal-golden
+uv run --project python python -m slopecoach_ml.cli turn-golden
 ```
 
 All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an artifact.
@@ -110,6 +114,49 @@ fake success.
 parses and validates the canonical pose, uses joint identity lookup, calculates
 `knee_angle_2d`, and serializes a provisional reference result. Tests use an explicit floating
 point tolerance and verify deterministic serialization.
+
+A4 adds two independent algorithm Goldens. `golden_temporal_pose_001.json` has irregular
+timestamps, deterministic jitter, a short fillable gap, a long unfilled gap, and an identity
+boundary. `golden_turn_signal_001.json` has timestamped positive/negative extrema, exact and
+interpolated zero crossings, a weak wiggle, and a hard missing boundary. They validate numerical
+engineering behavior—not skiing or product accuracy.
+
+## Temporal pose and provisional turns
+
+The A4 reference flow is `TargetIdentity -> TargetPoseSample -> temporal continuity segment ->
+timestamp-weighted short-gap interpolation -> per-joint One Euro -> signed image-space proxy ->
+peak/trough/zero-crossing analysis -> provisional segment`. Only sufficiently confident `LOCKED`
+identity input is trusted. `UNINITIALIZED`, `SUSPECT`, `LOST`, `RECOVERING`, `AMBIGUOUS`, active
+track changes, incompatible geometry, explicit discontinuity, and hard timestamp gaps reset the
+temporal boundary. Interpolation never crosses those boundaries.
+
+Raw `PoseFrame` evidence is immutable. Temporal joints separately preserve raw coordinates,
+derived interpolation support, stabilized coordinates, support confidence, and `OBSERVED`,
+`INTERPOLATED`, or `MISSING` provenance. The default interpolation endpoint gap is 300000 us;
+support confidence is the minimum of its endpoints and is never called RTMW confidence. One Euro
+defaults are min cutoff 1.0 Hz, beta 0.05, derivative cutoff 1.0 Hz, with frequency derived only
+from timestamps.
+
+`signed_lateral_body_proxy` is a dimensionless normalized 2D cross product between the torso axis
+and hip-to-lower-body displacement. It uses stabilized bilateral shoulders, hips, knees, and
+ankles. Its signs are `POSITIVE_PHASE`/`NEGATIVE_PHASE`, not skiing left/right, and it is never a
+physical edge angle. The dependency-free `ReferencePeakDetector` is the default. A lazy SciPy
+adapter exists but SciPy remains optional and absent from base dependencies.
+
+```bash
+make temporal-golden
+make turn-golden
+make benchmark-temporal-turns \
+  VIDEO=benchmarks/ski_bench/videos/example.mp4 SAMPLE_FPS=5 \
+  OUTPUT=artifacts/benchmarks/a4/example_5fps.json \
+  DEBUG_DIR=artifacts/debug/a4_temporal_turns/example_5fps
+```
+
+The A4 benchmark continues through the A3 identity manager and target-focused RTMW scheduler. It
+does not pick `persons[0]`, the largest box, or a manual target. Target Identity annotation remains
+deferred and the existing template remains `UNLABELED`; identity accuracy is unknown. Turn GT is
+also unavailable, so precision/recall/F1 remain JSON `null`. This blocks product validation, not
+deterministic temporal engineering work.
 
 ## Real ski-video benchmark and artifacts
 

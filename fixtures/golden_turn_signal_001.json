@@ -1,0 +1,34 @@
+{
+  "contract_version": "golden-turn-signal-v1",
+  "config": {
+    "minimum_signal_confidence": 0.3,
+    "minimum_peak_prominence": 0.2,
+    "minimum_peak_amplitude": 0.2,
+    "minimum_peak_separation_us": 300000,
+    "minimum_turn_duration_us": 200000,
+    "maximum_turn_duration_us": 2000000,
+    "minimum_valid_samples_per_turn": 3,
+    "maximum_missing_ratio": 0.4,
+    "zero_crossing_tolerance": 1e-9
+  },
+  "samples": [
+    {"timestamp_us": 0, "temporal_segment_id": 1, "value": -0.4, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 120000, "temporal_segment_id": 1, "value": 0.0, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 330000, "temporal_segment_id": 1, "value": 0.8, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 510000, "temporal_segment_id": 1, "value": 0.0, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 760000, "temporal_segment_id": 1, "value": -0.75, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 900000, "temporal_segment_id": 1, "value": -0.05, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 1020000, "temporal_segment_id": 1, "value": 0.02, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 1120000, "temporal_segment_id": 1, "value": -0.03, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 1300000, "temporal_segment_id": null, "value": null, "support_confidence": null, "provenance": "MISSING"},
+    {"timestamp_us": 2200000, "temporal_segment_id": 2, "value": -0.3, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 2400000, "temporal_segment_id": 2, "value": 0.65, "support_confidence": 0.9, "provenance": "OBSERVED"},
+    {"timestamp_us": 2650000, "temporal_segment_id": 2, "value": -0.2, "support_confidence": 0.9, "provenance": "OBSERVED"}
+  ],
+  "expected": {
+    "apex_timestamps_us": [330000, 760000, 2400000],
+    "apex_timestamp_tolerance_us": 1,
+    "zero_crossing_count": 6,
+    "segment_boundaries_us": [[120000, 510000], [510000, 985714], [2263158, 2591176]]
+  }
+}
