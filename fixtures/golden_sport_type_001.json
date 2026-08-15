@@ -1,0 +1,59 @@
+{
+  "contract_version": "golden-sport-type-v1",
+  "reference_contract_version": "sport-type-v1",
+  "cases": [
+    {
+      "case_id": "strong_ski_equipment",
+      "observations": [
+        {"evidence_id": "ski-eq-0", "kind": "EQUIPMENT", "provider_name": "mock-equipment", "timestamp_us": 0, "ski_support": 0.90, "snowboard_support": 0.05, "quality": 0.90, "scope": "FRAME"},
+        {"evidence_id": "ski-eq-1", "kind": "EQUIPMENT", "provider_name": "mock-equipment", "timestamp_us": 200000, "ski_support": 0.90, "snowboard_support": 0.05, "quality": 0.90, "scope": "FRAME"}
+      ],
+      "expected": {"effective_sport_type": "SKI", "effective_source": "AUTO", "resolution_status": "RESOLVED_AUTO", "auto_sport_type": "SKI", "auto_status": "RESOLVED_AUTO", "auto_user_disagreement": false, "ask_user_recommended": false}
+    },
+    {
+      "case_id": "strong_snowboard_visual",
+      "observations": [
+        {"evidence_id": "snow-visual", "kind": "VISUAL_CLASSIFIER", "provider_name": "mock-visual", "ski_support": 0.05, "snowboard_support": 0.92, "quality": 0.95, "scope": "CLIP"}
+      ],
+      "expected": {"effective_sport_type": "SNOWBOARD", "effective_source": "AUTO", "resolution_status": "RESOLVED_AUTO", "auto_sport_type": "SNOWBOARD", "auto_status": "RESOLVED_AUTO", "auto_user_disagreement": false, "ask_user_recommended": false}
+    },
+    {
+      "case_id": "secondary_only",
+      "observations": [
+        {"evidence_id": "pose-0", "kind": "POSE_GEOMETRY", "provider_name": "mock-pose-cue", "timestamp_us": 0, "ski_support": 0.95, "snowboard_support": 0.01, "quality": 1.0, "scope": "FRAME"},
+        {"evidence_id": "pose-1", "kind": "POSE_GEOMETRY", "provider_name": "mock-pose-cue", "timestamp_us": 200000, "ski_support": 0.95, "snowboard_support": 0.01, "quality": 1.0, "scope": "FRAME"},
+        {"evidence_id": "motion", "kind": "TEMPORAL_MOTION", "provider_name": "mock-motion", "ski_support": 0.95, "snowboard_support": 0.01, "quality": 1.0, "scope": "CLIP"}
+      ],
+      "expected": {"effective_sport_type": "UNKNOWN", "effective_source": "AUTO", "resolution_status": "INSUFFICIENT_PRIMARY_EVIDENCE", "auto_sport_type": "UNKNOWN", "auto_status": "INSUFFICIENT_PRIMARY_EVIDENCE", "auto_user_disagreement": false, "ask_user_recommended": true}
+    },
+    {
+      "case_id": "primary_conflict",
+      "observations": [
+        {"evidence_id": "conflict-eq", "kind": "EQUIPMENT", "provider_name": "mock-equipment", "ski_support": 0.90, "snowboard_support": 0.05, "quality": 1.0, "scope": "CLIP"},
+        {"evidence_id": "conflict-visual", "kind": "VISUAL_CLASSIFIER", "provider_name": "mock-visual", "ski_support": 0.05, "snowboard_support": 0.90, "quality": 1.0, "scope": "CLIP"}
+      ],
+      "expected": {"effective_sport_type": "UNKNOWN", "effective_source": "AUTO", "resolution_status": "CONFLICTING_PRIMARY_EVIDENCE", "auto_sport_type": "UNKNOWN", "auto_status": "CONFLICTING_PRIMARY_EVIDENCE", "auto_user_disagreement": false, "ask_user_recommended": true}
+    },
+    {
+      "case_id": "ambiguous_margin",
+      "observations": [
+        {"evidence_id": "close-visual", "kind": "VISUAL_CLASSIFIER", "provider_name": "mock-visual", "ski_support": 0.72, "snowboard_support": 0.61, "quality": 1.0, "scope": "CLIP"}
+      ],
+      "expected": {"effective_sport_type": "UNKNOWN", "effective_source": "AUTO", "resolution_status": "AMBIGUOUS", "auto_sport_type": "UNKNOWN", "auto_status": "AMBIGUOUS", "auto_user_disagreement": false, "ask_user_recommended": true}
+    },
+    {
+      "case_id": "user_override",
+      "user_selection": "SKI",
+      "observations": [
+        {"evidence_id": "override-visual", "kind": "VISUAL_CLASSIFIER", "provider_name": "mock-visual", "ski_support": 0.05, "snowboard_support": 0.92, "quality": 0.95, "scope": "CLIP"}
+      ],
+      "expected": {"effective_sport_type": "SKI", "effective_source": "USER", "resolution_status": "RESOLVED_USER", "auto_sport_type": "SNOWBOARD", "auto_status": "RESOLVED_AUTO", "auto_user_disagreement": true, "ask_user_recommended": false}
+    },
+    {
+      "case_id": "filename_is_not_evidence",
+      "input_path": "ski_test_001.mp4",
+      "observations": [],
+      "expected": {"effective_sport_type": "UNKNOWN", "effective_source": "AUTO", "resolution_status": "INSUFFICIENT_PRIMARY_EVIDENCE", "auto_sport_type": "UNKNOWN", "auto_status": "INSUFFICIENT_PRIMARY_EVIDENCE", "auto_user_disagreement": false, "ask_user_recommended": true}
+    }
+  ]
+}

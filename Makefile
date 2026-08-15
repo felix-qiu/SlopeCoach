@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden benchmark pose-doctor pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden benchmark pose-doctor pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -34,6 +34,9 @@ turn-golden:
 biomechanics-golden:
 	$(UV) run --project python python -m slopecoach_ml.cli biomechanics-golden
 
+sport-type-golden:
+	$(UV) run --project python python -m slopecoach_ml.cli sport-type-golden
+
 benchmark:
 	$(UV) run --project python python -m slopecoach_ml.cli benchmark $(FIXTURE)
 
@@ -59,6 +62,10 @@ benchmark-temporal-turns:
 benchmark-biomechanics:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-biomechanics VIDEO=/path/to/video' >&2; exit 2)
 	$(UV) run --project python python -m slopecoach_ml.cli benchmark-biomechanics "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+
+benchmark-sport-type:
+	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-sport-type VIDEO=/path/to/video' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-sport-type "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --sport-type "$(or $(SPORT_TYPE),auto)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
 
 prepare-biomechanics-dataset:
 	@test -n "$(VIDEO_DIR)" || (echo 'usage: make prepare-biomechanics-dataset VIDEO_DIR=benchmarks/ski_bench/videos OUTPUT=artifacts/manifests/biomechanics_real.local.json' >&2; exit 2)

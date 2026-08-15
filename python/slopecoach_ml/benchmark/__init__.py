@@ -14,6 +14,8 @@ from .real_pose import (
     benchmark_real_pose_frames,
     select_debug_frame_indices,
 )
+from .sport_type import SPORT_TYPE_BENCHMARK_CONTRACT_VERSION, benchmark_sport_type_frames
+from .sport_type_debug import write_sport_type_debug_artifacts
 from .target_debug import (
     TargetIdentityDebugCollector,
     select_target_debug_indices,
@@ -34,9 +36,12 @@ __all__ = [
     "benchmark_biomechanics_frames",
     "benchmark_real_pose_frames",
     "benchmark_target_identity_frames",
+    "benchmark_sport_type_frames",
     "benchmark_temporal_turns_frames",
     "write_temporal_debug_artifacts",
     "write_biomechanics_debug_artifacts",
+    "write_sport_type_debug_artifacts",
+    "SPORT_TYPE_BENCHMARK_CONTRACT_VERSION",
     "select_target_debug_indices",
     "write_ground_truth_comparison",
     "benchmark_video",

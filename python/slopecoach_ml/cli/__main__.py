@@ -15,6 +15,7 @@ from slopecoach_ml.benchmark import (
     benchmark_biomechanics_frames,
     benchmark_golden,
     benchmark_real_pose_frames,
+    benchmark_sport_type_frames,
     benchmark_target_identity_frames,
     benchmark_temporal_turns_frames,
     benchmark_video,
@@ -23,6 +24,7 @@ from slopecoach_ml.benchmark import (
     prepare_real_dataset_manifest,
     write_biomechanics_debug_artifacts,
     write_ground_truth_comparison,
+    write_sport_type_debug_artifacts,
     write_temporal_debug_artifacts,
 )
 from slopecoach_ml.biomechanics.golden import run_biomechanics_golden
@@ -42,6 +44,7 @@ from slopecoach_ml.reference import (
     analyze_pose_frame,
     load_golden_fixture,
 )
+from slopecoach_ml.sport_type import SportType, run_sport_type_golden
 from slopecoach_ml.temporal import run_temporal_golden, run_turn_golden
 from slopecoach_ml.video import OpenCVVideoSampler, inspect_video
 
@@ -132,6 +135,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(_root() / "fixtures/golden_temporal_biomechanics_001.json"),
     )
     biomechanics_golden.add_argument("--output")
+    sport_type_golden = subparsers.add_parser(
+        "sport-type-golden", help="run deterministic A6 SportType fusion Golden"
+    )
+    sport_type_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_sport_type_001.json")
+    )
+    sport_type_golden.add_argument("--output")
     temporal_turns = subparsers.add_parser(
         "benchmark-temporal-turns", help="run A4 temporal pose and turn benchmark"
     )
@@ -150,6 +160,16 @@ def build_parser() -> argparse.ArgumentParser:
     biomechanics.add_argument("--debug-dir")
     biomechanics.add_argument("--max-debug-frames", type=int, default=12)
     biomechanics.add_argument("--input-non-mirrored", action="store_true")
+    sport_type = subparsers.add_parser(
+        "benchmark-sport-type", help="run A6 auto/user SportType foundation benchmark"
+    )
+    sport_type.add_argument("video")
+    sport_type.add_argument("--sample-fps", type=float, default=5.0)
+    sport_type.add_argument("--sport-type", choices=("auto", "ski", "snowboard"), default="auto")
+    sport_type.add_argument("--output")
+    sport_type.add_argument("--debug-dir")
+    sport_type.add_argument("--max-debug-frames", type=int, default=12)
+    sport_type.add_argument("--input-non-mirrored", action="store_true")
     prepare_dataset = subparsers.add_parser(
         "prepare-biomechanics-dataset", help="prepare a local-only A5.2 real-video manifest"
     )
@@ -305,6 +325,10 @@ def main(argv: list[str] | None = None) -> int:
         result = run_biomechanics_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
+    if args.command == "sport-type-golden":
+        result = run_sport_type_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
         result = prepare_target_gt_template(
             args.video,
@@ -399,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         "benchmark-target-identity",
         "benchmark-temporal-turns",
         "benchmark-biomechanics",
+        "benchmark-sport-type",
     }:
         if not args.input_non_mirrored:
             raise RuntimeError(
@@ -485,7 +510,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
             _write_json(report, args.output)
             return 0
-        if args.command in {"benchmark-temporal-turns", "benchmark-biomechanics"}:
+        if args.command in {
+            "benchmark-temporal-turns",
+            "benchmark-biomechanics",
+            "benchmark-sport-type",
+        }:
             collector = TemporalTurnCollector(keep_images=bool(args.debug_dir))
             identity_template = (
                 _root()
@@ -497,12 +526,12 @@ def main(argv: list[str] | None = None) -> int:
                 if identity_template.is_file()
                 else "NOT_AVAILABLE"
             )
-            benchmark_runner = (
-                benchmark_biomechanics_frames
-                if args.command == "benchmark-biomechanics"
-                else benchmark_temporal_turns_frames
-            )
-            report = benchmark_runner(
+            benchmark_runner = {
+                "benchmark-temporal-turns": benchmark_temporal_turns_frames,
+                "benchmark-biomechanics": benchmark_biomechanics_frames,
+                "benchmark-sport-type": benchmark_sport_type_frames,
+            }[args.command]
+            runner_kwargs = dict(
                 input_path=args.video,
                 frames=OpenCVVideoSampler(args.video, sample_fps=args.sample_fps),
                 detector=detector,
@@ -516,9 +545,18 @@ def main(argv: list[str] | None = None) -> int:
                 collector=collector,
                 target_identity_gt_status=identity_gt_status,
             )
+            if args.command == "benchmark-sport-type":
+                runner_kwargs["user_selection"] = {
+                    "auto": None,
+                    "ski": SportType.SKI,
+                    "snowboard": SportType.SNOWBOARD,
+                }[args.sport_type]
+            report = benchmark_runner(**runner_kwargs)
             report["debug_artifacts"] = (
                 (
-                    write_biomechanics_debug_artifacts
+                    write_sport_type_debug_artifacts
+                    if args.command == "benchmark-sport-type"
+                    else write_biomechanics_debug_artifacts
                     if args.command == "benchmark-biomechanics"
                     else write_temporal_debug_artifacts
                 )(args.debug_dir, report, collector, max_frames=args.max_debug_frames)
@@ -532,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
                     "turn_events": None,
                 }
             )
+            report.pop("_upstream_biomechanics_report", None)
             report.pop("_upstream_debug_report", None)
             _write_json(report, args.output)
             return 0

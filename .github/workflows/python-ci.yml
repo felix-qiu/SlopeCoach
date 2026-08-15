@@ -40,3 +40,5 @@ jobs:
         run: uv run --project python python -m slopecoach_ml.cli turn-golden
       - name: Temporal biomechanics Golden
         run: uv run --project python python -m slopecoach_ml.cli biomechanics-golden
+      - name: SportType Golden
+        run: uv run --project python python -m slopecoach_ml.cli sport-type-golden

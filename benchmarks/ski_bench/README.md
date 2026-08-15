@@ -126,6 +126,29 @@ strict-null GT status. A single real source honestly reports
 not statistical generalization or accuracy evidence. No diagnosis, score, feature tuning, or
 automatic schema deletion occurs.
 
+Phase A6 adds `benchmark-sport-type` and contract `ski-bench-sport-type-v1`. It composes the A5.1
+real-video benchmark once, then runs dedicated SportType provider boundaries, collects existing A5
+aggregates as uncalibrated cues, performs deterministic `sport-type-v1` fusion, and applies an
+optional user override. Current RTMDet detections remain person-only; there is no second detector
+pass and no hard-coded ski/snowboard class ID.
+
+`EQUIPMENT` and `VISUAL_CLASSIFIER` are primary evidence. Pose geometry and temporal motion are
+secondary and cannot resolve AUTO alone. Both current primary providers are `NOT_CONFIGURED`, so
+the honest result is normally `UNKNOWN / INSUFFICIENT_PRIMARY_EVIDENCE` with user confirmation
+recommended. Filenames and directories are never evidence; user selection is routing input, not
+GT, and the auto result remains observable after override.
+
+```bash
+make benchmark-sport-type \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 SPORT_TYPE=auto \
+  OUTPUT=artifacts/benchmarks/a6/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a6_sport_type/ski_test_001_5fps
+```
+
+SportType GT is unavailable, so accuracy, precision, and recall remain null. A real UNKNOWN result
+is an honest provider-availability outcome, not a failed execution. A6 produces no diagnosis or
+score and does not reinterpret turn phase signs as skiing left/right.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

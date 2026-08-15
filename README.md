@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A5.2: Real Motion Coverage & Feature Robustness**. The code in
+SlopeCoach is currently in **Phase A6: SportType Foundation & Auto/User Resolution**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -36,6 +36,7 @@ python/slopecoach_ml/       Research/reference package
   biomechanics/             2D knee-angle reference slice
   temporal/                 Identity-safe interpolation and One Euro stabilization
   turns/                    Image-space proxy, extrema, crossings and provisional segments
+  sport_type/               Auto-first sport contracts, fusion, providers, cues and routing gate
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -101,6 +102,7 @@ uv run --project python python -m slopecoach_ml.cli benchmark fixtures/golden_po
 uv run --project python python -m slopecoach_ml.cli benchmark /path/to/video.mp4
 uv run --project python python -m slopecoach_ml.cli temporal-golden
 uv run --project python python -m slopecoach_ml.cli turn-golden
+uv run --project python python -m slopecoach_ml.cli sport-type-golden
 ```
 
 All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an artifact.
@@ -375,6 +377,39 @@ Pull requests and pushes to `main` run `.github/workflows/python-ci.yml`: lock v
 3.12 environment sync, formatting, lint, tests, Golden CLI, and Golden benchmark. The workflow has
 been validated with locally equivalent commands; that does not claim a GitHub-hosted run passed.
 
+## A6 SportType foundation
+
+A6 adds provisional `sport-type-v1` contracts and deterministic, dependency-free
+`ReferenceSportTypeFusion` for `SKI`, `SNOWBOARD`, and unresolved `UNKNOWN`. The policy is Auto
+First, Ask on Ambiguity, User Override Wins. `EQUIPMENT` and `VISUAL_CLASSIFIER` are primary
+evidence; future calibrated `POSE_GEOMETRY` and `TEMPORAL_MOTION` evidence is secondary. Auto
+resolution requires active primary evidence, sufficient engineering support, and a sufficient
+margin. Ties, conflicts, weak evidence, and secondary-only input remain `UNKNOWN`. Support values
+are engineering values, not calibrated probabilities.
+
+The current RTMDet provider remains person-only and is never interpreted as equipment evidence.
+No dedicated equipment or visual sport classifier is configured, so current real AUTO benchmarks
+honestly report both providers `NOT_CONFIGURED` and normally recommend user confirmation. A user
+selection controls effective routing while retaining the auto decision and disagreement. User
+input is not SportType ground truth.
+
+Four existing A5 aggregate facts are exposed as viewpoint-dependent, uncalibrated measurements
+for future calibration. They preserve nulls and have `contributes_to_auto_fusion=false`; there are
+no pose-width/body-side classification rules and the 30-entry biomechanics schema is unchanged.
+
+```bash
+make sport-type-golden
+make benchmark-sport-type \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 SPORT_TYPE=auto \
+  OUTPUT=artifacts/benchmarks/a6/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a6_sport_type/ski_test_001_5fps
+```
+
+The `ski-bench-sport-type-v1` benchmark composes the existing single-pass A5.1 pipeline. It does
+not rerun RTMDet/RTMW or infer from filenames. Generic pose and image-space biomechanics remain
+available when SportType is `UNKNOWN`; only future sport-specific analysis is gated.
+`SPORT_TYPE_GT_STATUS = NOT_AVAILABLE`, so accuracy, precision, and recall remain JSON `null`.
+
 ## Provider status and deferred work
 
 Phase A2 defines an optional OpenMMLab research stack isolated from the minimal Python 3.12
@@ -446,8 +481,8 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A4.1: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+Not implemented in Phase A6: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
 the production Rust Domain Kernel, ByteTrack/deep ReID, identity or turn GT labeling, diagnosis,
-scoring, drills, 3D/physical edge angle, LLMs, QNN, TensorRT, live camera coaching, complex UI, or
-first-party C++. Mobile integration and the Rust production implementation remain explicitly
-deferred.
+scoring, drills, equipment models, visual sport classifiers, SportType GT, 3D/physical edge angle,
+LLMs/VLMs/CLIP, QNN, TensorRT, live camera coaching, complex UI, or first-party C++. Mobile
+integration and the Rust production implementation remain explicitly deferred.
