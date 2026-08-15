@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from slopecoach_ml.benchmark import sport_type as module
 from slopecoach_ml.biomechanics import FEATURE_REGISTRY_SHA256
 from slopecoach_ml.sport_type import (
+    FailedSportEvidenceProvider,
     MockSportEvidenceProvider,
     NotConfiguredVisualSportEvidenceProvider,
     SportEvidenceKind,
@@ -60,7 +62,7 @@ def test_benchmark_reports_honest_provider_gt_and_gate(monkeypatch):
         detector_model={},
         pose_model={},
     )
-    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v2"
+    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v3"
     assert report["sport_type"]["effective_sport_type"] == "UNKNOWN"
     assert report["sport_type"]["resolution_status"] == "INSUFFICIENT_PRIMARY_EVIDENCE"
     assert report["sport_type"]["config"]["profile"] == "RESEARCH_DEFAULTS_A6"
@@ -81,6 +83,10 @@ def test_benchmark_reports_honest_provider_gt_and_gate(monkeypatch):
         == FEATURE_REGISTRY_SHA256
     )
     json.dumps(report, allow_nan=False, sort_keys=True)
+    assert (
+        report["validation"]["AUTO_SPORT_TYPE_PRODUCT_READINESS"]
+        == "NOT_READY_PRIMARY_PROVIDER_REQUIRED"
+    )
 
 
 def test_executed_equipment_provider_removes_only_equipment_limitation(monkeypatch):
@@ -118,3 +124,130 @@ def test_executed_equipment_provider_removes_only_equipment_limitation(monkeypat
     assert "NO_CONFIGURED_VISUAL_SPORT_CLASSIFIER" in report["limitations"]
     summary = report["provider_validation"]["provider_kind_summaries"][0]
     assert summary["overall_status"] == "EXECUTED_WITH_EVIDENCE"
+
+
+def test_benchmark_readiness_distinguishes_unknown_evidence_from_resolved(monkeypatch):
+    monkeypatch.setattr(
+        module, "benchmark_biomechanics_frames", lambda **kwargs: _upstream_report()
+    )
+
+    def run(ski, snowboard):
+        observations = tuple(
+            SportEvidenceObservation(
+                f"EQUIPMENT:mock-equipment:{timestamp}:{index}",
+                SportEvidenceKind.EQUIPMENT,
+                "mock-equipment",
+                ski,
+                snowboard,
+                1.0,
+                SportEvidenceScope.FRAME,
+                timestamp_us=timestamp,
+            )
+            for index, timestamp in enumerate((0, 200000))
+        )
+        return module.benchmark_sport_type_frames(
+            input_path="ski_test_001.mp4",
+            frames=(),
+            detector=None,
+            pose_provider=None,
+            detector_model={},
+            pose_model={},
+            evidence_providers=(
+                MockSportEvidenceProvider(
+                    "mock-equipment", SportEvidenceKind.EQUIPMENT, observations
+                ),
+                NotConfiguredVisualSportEvidenceProvider(),
+            ),
+        )
+
+    unresolved = run(0.20, 0.30)
+    assert (
+        unresolved["validation"]["AUTO_SPORT_TYPE_PRODUCT_READINESS"]
+        == "NOT_READY_PRIMARY_EVIDENCE_COVERAGE_AND_GT_REQUIRED"
+    )
+    resolved = run(0.90, 0.02)
+    assert (
+        resolved["validation"]["AUTO_SPORT_TYPE_PRODUCT_READINESS"]
+        == "NOT_READY_GT_REQUIRED"
+    )
+    assert (
+        resolved["diagnostic_auto_decisions"]["combined_auto_decision"]
+        == resolved["sport_type"]["auto_decision"]
+    )
+
+
+def test_benchmark_locked_contexts_are_not_summed_across_providers(monkeypatch):
+    monkeypatch.setattr(
+        module, "benchmark_biomechanics_frames", lambda **kwargs: _upstream_report()
+    )
+
+    class Collector:
+        sport_contexts = tuple(
+            SimpleNamespace(timestamp_us=timestamp) for timestamp in (0, 200000, 400000)
+        )
+
+        def release_frame_contexts(self):
+            pass
+
+    report = module.benchmark_sport_type_frames(
+        input_path="ski_test_001.mp4",
+        frames=(),
+        detector=None,
+        pose_provider=None,
+        detector_model={},
+        pose_model={},
+        collector=Collector(),
+        evidence_providers=(
+            MockSportEvidenceProvider("equipment-a", SportEvidenceKind.EQUIPMENT),
+            MockSportEvidenceProvider("equipment-b", SportEvidenceKind.EQUIPMENT),
+            NotConfiguredVisualSportEvidenceProvider(),
+        ),
+    )
+    assert report["sport_frame_contexts"] == {
+        "locked_context_count": 3,
+        "distinct_timestamp_count": 3,
+    }
+
+
+def test_initialized_provider_failure_does_not_erase_other_primary_evidence(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        module, "benchmark_biomechanics_frames", lambda **kwargs: _upstream_report()
+    )
+    observations = tuple(
+        SportEvidenceObservation(
+            f"EQUIPMENT:equipment:{timestamp}:{index}",
+            SportEvidenceKind.EQUIPMENT,
+            "equipment",
+            0.9,
+            0.01,
+            1.0,
+            SportEvidenceScope.FRAME,
+            timestamp_us=timestamp,
+        )
+        for index, timestamp in enumerate((0, 200000))
+    )
+    report = module.benchmark_sport_type_frames(
+        input_path="ski_test_001.mp4",
+        frames=(),
+        detector=None,
+        pose_provider=None,
+        detector_model={},
+        pose_model={},
+        evidence_providers=(
+            MockSportEvidenceProvider(
+                "equipment", SportEvidenceKind.EQUIPMENT, observations
+            ),
+            FailedSportEvidenceProvider(
+                "openai-clip-vit-b32-visual-sport",
+                SportEvidenceKind.VISUAL_CLASSIFIER,
+                "RuntimeError: MODEL_LOAD_FAILED",
+            ),
+        ),
+    )
+    assert report["provider_validation"]["VISUAL_SPORT_PROVIDER_STATUS"] == "FAILED"
+    assert report["provider_validation"]["EQUIPMENT_SPORT_PROVIDER_STATUS"] == (
+        "EXECUTED_WITH_EVIDENCE"
+    )
+    assert report["sport_type"]["auto_decision"]["sport_type"] == "SKI"

@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A6.1: Primary Equipment Evidence Integration**. The code in
+SlopeCoach is currently in **Phase A6.2: Cross-Primary Sport Evidence Research**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -103,6 +103,8 @@ uv run --project python python -m slopecoach_ml.cli benchmark /path/to/video.mp4
 uv run --project python python -m slopecoach_ml.cli temporal-golden
 uv run --project python python -m slopecoach_ml.cli turn-golden
 uv run --project python python -m slopecoach_ml.cli sport-type-golden
+uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
+  --visual-checkpoint artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
 
 All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an artifact.
@@ -451,6 +453,60 @@ existing `ReferenceSportTypeFusion`; it never directly assigns SKI/SNOWBOARD. Us
 wins while retaining the auto decision. SportType GT, diagnosis, scoring, and product accuracy
 validation remain unavailable.
 
+### A6.2 visual SportType evidence
+
+A6.2 adds a second independent primary evidence kind without changing `sport-type-v1` fusion
+weights or thresholds:
+
+```text
+LOCKED target -> RTMDet equipment ---------+
+              -> CLIP target-crop visual --+-> ReferenceSportTypeFusion
+                                               -> SKI / SNOWBOARD / UNKNOWN
+```
+
+The visual provider is the official OpenAI CLIP `ViT-B/32` zero-shot baseline pinned to commit
+`d05afc436d78f1c48dc0dbf8e5980a9d471f35f6`. It uses a versioned, fixed English
+`SKI`/`SNOWBOARD`/`NEUTRAL` prompt taxonomy. Neutral support remains diagnostic evidence; it is
+not a new `SportType`. CLIP supports are normalized zero-shot engineering supports, not calibrated
+probabilities, and require in-domain SportType validation before any production claim. Results
+depend on the fixed prompt taxonomy.
+
+CLIP, Torch, TorchVision, Pillow, and ftfy remain absent from the normal Python 3.12 dependency
+path. Install the official pinned source only in the ignored Python 3.11 OpenMMLab runtime, then
+explicitly prepare the local checkpoint. Neither import nor benchmark silently downloads it:
+
+```bash
+git clone https://github.com/openai/CLIP.git artifacts/openai-clip-src
+git -C artifacts/openai-clip-src checkout d05afc436d78f1c48dc0dbf8e5980a9d471f35f6
+artifacts/openmmlab-venv/bin/python -m pip install --no-deps artifacts/openai-clip-src
+artifacts/openmmlab-venv/bin/python -m pip install 'ftfy>=6,<7' 'regex>=2024,<2027'
+
+make prepare-visual-sport-model OPENML_PY=artifacts/openmmlab-venv/bin/python
+make sport-visual-doctor OPENML_PY=artifacts/openmmlab-venv/bin/python \
+  VISUAL_CHECKPOINT=artifacts/models/a6_2/openai_clip/ViT-B-32.pt
+```
+
+Run the v3 benchmark with both providers explicitly enabled:
+
+```bash
+make benchmark-sport-type \
+  OPENML_PY=artifacts/openmmlab-venv/bin/python \
+  VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 SPORT_TYPE=auto \
+  EQUIPMENT_PROVIDER=rtmdet-coco EQUIPMENT_CONFIG=/path/to/rtmdet_tiny_config.py \
+  EQUIPMENT_CHECKPOINT=artifacts/models/a6_1/rtmdet_tiny_coco/checkpoint.pth \
+  VISUAL_PROVIDER=openai-clip \
+  VISUAL_CHECKPOINT=artifacts/models/a6_2/openai_clip/ViT-B-32.pt \
+  OUTPUT=artifacts/benchmarks/a6_2/ski_test_001_5fps.json \
+  DEBUG_DIR=artifacts/debug/a6_2_sport_type/ski_test_001_5fps
+```
+
+`ski-bench-sport-type-v3` reports equipment-only, visual-only, and combined diagnostic auto
+decisions from one model pass. Only the combined result plus an optional authoritative user
+override controls routing. Same-frame evidence IDs are deterministic and provider-qualified.
+Dataset-level LOCKED context counts are unique; per-provider selection and inference counts are
+separate. SportType GT remains unavailable, so accuracy, precision, and recall remain JSON `null`
+even if AUTO resolves on a real clip.
+
 ## Provider status and deferred work
 
 Phase A2 defines an optional OpenMMLab research stack isolated from the minimal Python 3.12
@@ -522,8 +578,8 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A6: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+Not implemented in Phase A6.2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
 the production Rust Domain Kernel, ByteTrack/deep ReID, identity or turn GT labeling, diagnosis,
-scoring, drills, equipment models, visual sport classifiers, SportType GT, 3D/physical edge angle,
-LLMs/VLMs/CLIP, QNN, TensorRT, live camera coaching, complex UI, or first-party C++. Mobile
+scoring, drills, calibrated/production SportType models, SportType GT, 3D/physical edge angle,
+LLM/VLM coaching, QNN, TensorRT, live camera coaching, complex UI, or first-party C++. Mobile
 integration and the Rust production implementation remain explicitly deferred.

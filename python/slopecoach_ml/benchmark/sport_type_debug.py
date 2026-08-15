@@ -22,6 +22,13 @@ def write_sport_type_debug_artifacts(output_dir, report, collector, *, max_frame
             "provider_kind_summary": report["provider_validation"]["provider_kind_summaries"][0],
         },
         "equipment_frames": report["_equipment_debug_frames"],
+        "visual_provider": {
+            "models": report["visual_models"],
+            "summary": report["visual_evidence"],
+            "provider_kind_summary": report["provider_validation"]["provider_kind_summaries"][1],
+        },
+        "visual_frames": report["_visual_debug_frames"],
+        "diagnostic_auto_decisions": report["diagnostic_auto_decisions"],
     }
     paths = {}
     for name, payload in payloads.items():
@@ -46,7 +53,14 @@ def write_sport_type_debug_artifacts(output_dir, report, collector, *, max_frame
 
 
 def _write_equipment_contact_sheet(destination, report, collector):
-    frames = report["_equipment_debug_frames"]
+    equipment_by_timestamp = {
+        item["timestamp_us"]: item for item in report["_equipment_debug_frames"]
+    }
+    visual_by_timestamp = {item["timestamp_us"]: item for item in report["_visual_debug_frames"]}
+    frames = [
+        visual_by_timestamp.get(timestamp) or equipment_by_timestamp[timestamp]
+        for timestamp in sorted(set(equipment_by_timestamp) | set(visual_by_timestamp))
+    ]
     if not frames:
         return None
     try:
@@ -55,26 +69,38 @@ def _write_equipment_contact_sheet(destination, report, collector):
     except ImportError as error:
         raise RuntimeError("DEBUG_DEPENDENCY_MISSING: opencv-python/numpy") from error
     tiles = []
-    sport = report["sport_type"]["effective_sport_type"]
+    sport = report["diagnostic_auto_decisions"]["combined_auto_decision"]["sport_type"]
     for item in frames:
         encoded = collector.images.get(item["frame_index"])
         if encoded is None:
             continue
         canvas = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
-        for key, color in (
-            ("target_bbox", (0, 255, 0)),
-            ("crop_bbox", (255, 180, 0)),
-            ("association_zone", (0, 220, 255)),
-        ):
-            _rectangle(cv2, canvas, item[key], color, 2)
-        for detection in item["associated_detections"]:
+        equipment = equipment_by_timestamp.get(item["timestamp_us"])
+        visual = visual_by_timestamp.get(item["timestamp_us"])
+        _rectangle(cv2, canvas, item["target_bbox"], (0, 255, 0), 2)
+        if equipment:
+            _rectangle(cv2, canvas, equipment["crop_bbox"], (255, 180, 0), 2)
+            _rectangle(cv2, canvas, equipment["association_zone"], (0, 220, 255), 2)
+        if visual:
+            _rectangle(cv2, canvas, visual["visual_crop_bbox"], (180, 80, 255), 2)
+        for detection in equipment["associated_detections"] if equipment else ():
             color = (255, 0, 255) if detection["class_name"] == "skis" else (255, 0, 0)
             _rectangle(cv2, canvas, detection["bbox"], color, 3)
-        labels = (
-            "EQUIPMENT EVIDENCE ONLY",
-            f"SPORT TYPE = {sport}",
-            f"ski={item['max_ski_support']:.2f} snowboard={item['max_snowboard_support']:.2f}",
-        )
+        labels = [
+            "VISUAL ZERO-SHOT EVIDENCE - NOT CALIBRATED",
+            f"COMBINED AUTO = {sport}",
+        ]
+        if equipment:
+            labels.append(
+                f"Equipment ski={equipment['max_ski_support']:.2f} "
+                f"snowboard={equipment['max_snowboard_support']:.2f}"
+            )
+        if visual:
+            labels.append(
+                f"Visual ski={visual['ski_support']:.2f} "
+                f"snowboard={visual['snowboard_support']:.2f} "
+                f"neutral={visual['neutral_support']:.2f}"
+            )
         for row, label in enumerate(labels):
             cv2.putText(
                 canvas,
@@ -100,7 +126,7 @@ def _write_equipment_contact_sheet(destination, report, collector):
         while len(row) < 3:
             row.append(np.zeros_like(row[0]))
         rows.append(cv2.hconcat(row))
-    path = destination / "equipment_contact_sheet.jpg"
+    path = destination / "sport_type_contact_sheet.jpg"
     if not cv2.imwrite(str(path), cv2.vconcat(rows)):
         raise RuntimeError("EQUIPMENT_CONTACT_SHEET_WRITE_FAILED")
     return str(path)

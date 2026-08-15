@@ -21,6 +21,7 @@ from slopecoach_ml.sport_type import (
     equipment_crop_bbox,
     execute_sport_evidence_providers,
     select_equipment_contexts,
+    sport_evidence_id,
     summarize_provider_kind,
 )
 
@@ -200,6 +201,29 @@ def test_provider_failure_isolated_and_other_evidence_survives():
     assert (
         ReferenceSportTypeFusion().decide(results[1].observations).sport_type
         is SportType.SKI
+    )
+
+
+def test_provider_qualified_ids_do_not_collide_at_same_frame():
+    classes = ("skis", "snowboard")
+    first = MMDetEquipmentSportEvidenceProvider(
+        FakeBackend(classes, ((detection(0),),))
+    )
+    second = MMDetEquipmentSportEvidenceProvider(
+        FakeBackend(classes, ((detection(0),),))
+    )
+    first.name = "equipment-a"
+    second.name = "equipment-b"
+    results = execute_sport_evidence_providers((first, second), (context(10, 7),))
+    ids = [item.evidence_id for result in results for item in result.observations]
+    assert ids == ["EQUIPMENT:equipment-a:10:7", "EQUIPMENT:equipment-b:10:7"]
+    assert len(ids) == len(set(ids))
+    assert (
+        sport_evidence_id(SportEvidenceKind.VISUAL_CLASSIFIER, "visual", 10, 7)
+        not in ids
+    )
+    ReferenceSportTypeFusion().decide(
+        tuple(item for result in results for item in result.observations)
     )
 
 

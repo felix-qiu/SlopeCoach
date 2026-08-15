@@ -46,13 +46,20 @@ from slopecoach_ml.reference import (
     load_golden_fixture,
 )
 from slopecoach_ml.sport_type import (
+    ClipVisualSportEvidenceProvider,
+    FailedSportEvidenceProvider,
     MMDetEquipmentSportEvidenceProvider,
+    NotConfiguredEquipmentSportEvidenceProvider,
     NotConfiguredVisualSportEvidenceProvider,
+    OpenAIClipVisualSportBackend,
     OpenMMLabEquipmentBackend,
+    SportEvidenceKind,
     SportType,
     equipment_provider_doctor,
+    prepare_visual_sport_model,
     run_sport_type_golden,
     sha256_file,
+    visual_provider_doctor,
 )
 from slopecoach_ml.temporal import run_temporal_golden, run_turn_golden
 from slopecoach_ml.video import OpenCVVideoSampler, inspect_video
@@ -94,6 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     equipment_doctor.add_argument("--equipment-config")
     equipment_doctor.add_argument("--equipment-checkpoint")
+    visual_doctor = subparsers.add_parser(
+        "sport-visual-doctor", help="validate the optional OpenAI CLIP visual provider"
+    )
+    visual_doctor.add_argument("--visual-checkpoint")
+    visual_doctor.add_argument("--visual-model-name", choices=("ViT-B/32",), default="ViT-B/32")
+    prepare_visual = subparsers.add_parser(
+        "prepare-visual-sport-model", help="explicitly download the official CLIP ViT-B/32 weight"
+    )
+    prepare_visual.add_argument(
+        "--destination", default=str(_root() / "artifacts/models/a6_2/openai_clip")
+    )
     pose_image = subparsers.add_parser(
         "pose-image", help="run configured RTMDet + RTMW-L on an image"
     )
@@ -183,6 +201,9 @@ def build_parser() -> argparse.ArgumentParser:
     sport_type.add_argument("--equipment-provider", choices=("none", "rtmdet-coco"), default="none")
     sport_type.add_argument("--equipment-config")
     sport_type.add_argument("--equipment-checkpoint")
+    sport_type.add_argument("--visual-provider", choices=("none", "openai-clip"), default="none")
+    sport_type.add_argument("--visual-checkpoint")
+    sport_type.add_argument("--visual-model-name", choices=("ViT-B/32",), default="ViT-B/32")
     sport_type.add_argument("--output")
     sport_type.add_argument("--debug-dir")
     sport_type.add_argument("--max-debug-frames", type=int, default=12)
@@ -373,6 +394,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         _write_json(report, None)
         return 0 if report["EQUIPMENT_SPORT_PROVIDER_READINESS"].startswith("READY") else 3
+    if args.command == "prepare-visual-sport-model":
+        report = prepare_visual_sport_model(args.destination)
+        _write_json(report, None)
+        return 0
+    if args.command == "sport-visual-doctor":
+        registry_model = _visual_registry_model()
+        checkpoint_path = args.visual_checkpoint or os.getenv("SLOPECOACH_VISUAL_SPORT_CHECKPOINT")
+        report = visual_provider_doctor(
+            checkpoint_path,
+            device=configured_device(),
+            expected_checkpoint_sha256=(
+                registry_model.checkpoint_sha256 if registry_model else None
+            ),
+            implementation_commit=registry_model.model_version if registry_model else None,
+        )
+        _write_json(report, None)
+        return 0 if report["VISUAL_SPORT_PROVIDER_READINESS"].startswith("READY") else 3
     if args.command == "pose-image":
         if not args.input_non_mirrored:
             raise RuntimeError(
@@ -586,11 +624,22 @@ def main(argv: list[str] | None = None) -> int:
                     "ski": SportType.SKI,
                     "snowboard": SportType.SNOWBOARD,
                 }[args.sport_type]
-                if args.equipment_provider == "rtmdet-coco":
-                    runner_kwargs["evidence_providers"] = (
-                        _equipment_provider(args),
-                        NotConfiguredVisualSportEvidenceProvider(),
+                runner_kwargs["evidence_providers"] = (
+                    _provider_or_failure(
+                        lambda: _equipment_provider(args),
+                        "openmmlab-rtmdet-tiny-coco-equipment",
+                        SportEvidenceKind.EQUIPMENT,
                     )
+                    if args.equipment_provider == "rtmdet-coco"
+                    else NotConfiguredEquipmentSportEvidenceProvider(),
+                    _provider_or_failure(
+                        lambda: _visual_provider(args),
+                        "openai-clip-vit-b32-visual-sport",
+                        SportEvidenceKind.VISUAL_CLASSIFIER,
+                    )
+                    if args.visual_provider == "openai-clip"
+                    else NotConfiguredVisualSportEvidenceProvider(),
+                )
             report = benchmark_runner(**runner_kwargs)
             report["debug_artifacts"] = (
                 (
@@ -612,6 +661,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             report.pop("_upstream_biomechanics_report", None)
             report.pop("_equipment_debug_frames", None)
+            report.pop("_visual_debug_frames", None)
             report.pop("_upstream_debug_report", None)
             _write_json(report, args.output)
             return 0
@@ -692,6 +742,23 @@ def _equipment_registry_sha() -> str | None:
     return model.checkpoint_sha256 if model else None
 
 
+def _visual_registry_model():
+    return load_model_registry(_root() / "models/registry.json").get(
+        "openai-clip-vit-b32-visual-sport"
+    )
+
+
+def _provider_or_failure(factory, name, kind):
+    try:
+        return factory()
+    except (OSError, RuntimeError, ValueError, KeyError) as error:
+        return FailedSportEvidenceProvider(
+            name=name,
+            kind=kind,
+            error=f"{type(error).__name__}: {error}",
+        )
+
+
 def _equipment_provider(args):
     config_path = args.equipment_config or os.getenv("SLOPECOACH_EQUIPMENT_DETECTOR_CONFIG")
     checkpoint_path = args.equipment_checkpoint or os.getenv(
@@ -719,6 +786,31 @@ def _equipment_provider(args):
         checkpoint_source=registry_model.checkpoint_source if registry_model else None,
         checkpoint_sha256=actual_sha,
         model_load_seconds=backend.model_load_seconds,
+    )
+
+
+def _visual_provider(args):
+    checkpoint_path = args.visual_checkpoint or os.getenv("SLOPECOACH_VISUAL_SPORT_CHECKPOINT")
+    if args.visual_model_name != "ViT-B/32":
+        raise RuntimeError("VISUAL_MODEL_UNSUPPORTED")
+    if not checkpoint_path or not Path(checkpoint_path).is_file():
+        raise RuntimeError("VISUAL_MODEL_CHECKPOINT_MISSING")
+    actual_sha = sha256_file(checkpoint_path)
+    registry_model = _visual_registry_model()
+    expected_sha = registry_model.checkpoint_sha256 if registry_model else None
+    if expected_sha and actual_sha != expected_sha:
+        raise RuntimeError("VISUAL_CHECKPOINT_SHA256_MISMATCH")
+    device = configured_device()
+    backend = OpenAIClipVisualSportBackend(checkpoint_path, device=device)
+    return ClipVisualSportEvidenceProvider(
+        backend,
+        device=device,
+        implementation_commit=registry_model.model_version if registry_model else None,
+        checkpoint_path=checkpoint_path,
+        checkpoint_sha256=actual_sha,
+        model_load_seconds=backend.model_load_seconds,
+        text_prototype_seconds=backend.text_prototype_seconds,
+        input_resolution=backend.input_resolution,
     )
 
 

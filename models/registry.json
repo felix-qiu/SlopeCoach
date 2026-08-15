@@ -57,6 +57,25 @@
       "checkpoint_license": null,
       "training_metadata": "Full COCO object detector; equipment evidence uses dynamically resolved skis and snowboard class names.",
       "notes": "A6.1 research equipment evidence provider; class indices are runtime metadata and are never hard-coded."
+    },
+    {
+      "provider": "OpenAI CLIP",
+      "framework": "PyTorch",
+      "framework_version": "2.1.2",
+      "model_family": "CLIP",
+      "model_id": "openai-clip-vit-b32-visual-sport",
+      "model_version": "d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",
+      "task": "zero-shot-visual-sport-evidence",
+      "input_size": [224, 224],
+      "joint_schema": null,
+      "config_source": "https://github.com/openai/CLIP/tree/d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",
+      "checkpoint_source": "https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt",
+      "checkpoint_filename": "ViT-B-32.pt",
+      "checkpoint_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+      "code_license": "MIT",
+      "checkpoint_license": null,
+      "training_metadata": "Official OpenAI CLIP ViT-B/32 zero-shot model; in-domain SportType validation is unavailable.",
+      "notes": "RESEARCH_ZERO_SHOT_BASELINE_ONLY; zero-shot supports are not calibrated probabilities and require in-domain validation before any production claim."
     }
   ]
 }

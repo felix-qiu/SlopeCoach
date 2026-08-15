@@ -9,8 +9,10 @@ from slopecoach_ml.biomechanics import (
     FEATURE_REGISTRY_SHA256,
 )
 from slopecoach_ml.sport_type import (
+    VISUAL_SPORT_PROMPT_SCHEMA_VERSION,
     NotConfiguredEquipmentSportEvidenceProvider,
     NotConfiguredVisualSportEvidenceProvider,
+    ReferenceSportTypeFusion,
     SportEvidenceKind,
     SportType,
     SportTypeConfig,
@@ -19,12 +21,13 @@ from slopecoach_ml.sport_type import (
     resolve_sport_type,
     sport_specific_analysis_allowed,
     summarize_provider_kind,
+    visual_prompt_sha256,
 )
 
 from .biomechanics_features import benchmark_biomechanics_frames
 from .sport_type_collector import SportTypeBenchmarkCollector
 
-SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v2"
+SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v3"
 
 
 def benchmark_sport_type_frames(
@@ -79,6 +82,15 @@ def benchmark_sport_type_frames(
         providers, tuple(getattr(sink, "sport_contexts", ()))
     )
     provider_seconds = time.perf_counter() - stage
+    sport_contexts = tuple(getattr(sink, "sport_contexts", ()))
+    context_timestamps = {item.timestamp_us for item in sport_contexts}
+    context_keys = {
+        (item.timestamp_us, getattr(item, "frame_index", None)) for item in sport_contexts
+    }
+    sport_frame_contexts = {
+        "locked_context_count": len(context_keys),
+        "distinct_timestamp_count": len(context_timestamps),
+    }
     if hasattr(sink, "release_frame_contexts"):
         sink.release_frame_contexts()
     stage = time.perf_counter()
@@ -93,8 +105,14 @@ def benchmark_sport_type_frames(
     real_status = _real_status(sport_result)
     equipment_summary = summarize_provider_kind(provider_results, SportEvidenceKind.EQUIPMENT)
     visual_summary = summarize_provider_kind(provider_results, SportEvidenceKind.VISUAL_CLASSIFIER)
+    executed_primary_provider_count = (
+        equipment_summary["executed_provider_count"] + visual_summary["executed_provider_count"]
+    )
     equipment_providers = [
         provider for provider in providers if provider.kind is SportEvidenceKind.EQUIPMENT
+    ]
+    visual_providers = [
+        provider for provider in providers if provider.kind is SportEvidenceKind.VISUAL_CLASSIFIER
     ]
     equipment_debug = [
         item
@@ -102,10 +120,30 @@ def benchmark_sport_type_frames(
         for item in getattr(provider, "last_debug_frames", ())
     ]
     equipment_execution = _equipment_execution_summary(equipment_providers, equipment_summary)
+    visual_execution = _visual_execution_summary(visual_providers, visual_summary)
     equipment_performance = _equipment_performance(equipment_providers)
+    visual_performance = _visual_performance(visual_providers)
+    visual_debug = [
+        item for provider in visual_providers for item in getattr(provider, "last_debug_frames", ())
+    ]
+    resolved_config = config or SportTypeConfig()
+    equipment_only = ReferenceSportTypeFusion(resolved_config).decide(
+        observation
+        for result in provider_results
+        if result.evidence_kind is SportEvidenceKind.EQUIPMENT
+        for observation in result.observations
+    )
+    visual_only = ReferenceSportTypeFusion(resolved_config).decide(
+        observation
+        for result in provider_results
+        if result.evidence_kind is SportEvidenceKind.VISUAL_CLASSIFIER
+        for observation in result.observations
+    )
     upstream_perf = upstream["performance"]
     report = {
         "benchmark_contract_version": SPORT_TYPE_BENCHMARK_CONTRACT_VERSION,
+        "visual_prompt_schema_version": VISUAL_SPORT_PROMPT_SCHEMA_VERSION,
+        "visual_prompt_sha256": visual_prompt_sha256(),
         "input_kind": "REAL_VIDEO",
         "video": upstream["video"],
         "sampling": upstream["sampling"],
@@ -115,6 +153,12 @@ def benchmark_sport_type_frames(
             for provider in equipment_providers
             if hasattr(provider, "provenance")
         ],
+        "visual_models": [
+            provider.provenance()
+            for provider in visual_providers
+            if hasattr(provider, "provenance")
+        ],
+        "sport_frame_contexts": sport_frame_contexts,
         "identity_input": upstream["identity_input"],
         "temporal_input": upstream["temporal_input"],
         "biomechanics_input": {
@@ -123,6 +167,11 @@ def benchmark_sport_type_frames(
             "feature_registry_sha256": FEATURE_REGISTRY_SHA256,
         },
         "sport_type": sport_result.to_dict(),
+        "diagnostic_auto_decisions": {
+            "equipment_only_auto_decision": equipment_only.to_dict(),
+            "visual_only_auto_decision": visual_only.to_dict(),
+            "combined_auto_decision": auto.to_dict(),
+        },
         "provider_validation": {
             "EQUIPMENT_SPORT_PROVIDER_STATUS": equipment_summary["overall_status"],
             "VISUAL_SPORT_PROVIDER_STATUS": visual_summary["overall_status"],
@@ -131,6 +180,7 @@ def benchmark_sport_type_frames(
             "TEMPORAL_SPORT_EVIDENCE_STATUS": "UNCALIBRATED_MEASUREMENTS_ONLY",
         },
         "equipment_evidence": equipment_execution,
+        "visual_evidence": visual_execution,
         "downstream_gate": {
             "GENERIC_POSE_ALLOWED": True,
             "GENERIC_BIOMECHANICS_ALLOWED": True,
@@ -163,28 +213,34 @@ def benchmark_sport_type_frames(
             "sport_evidence_provider_total_seconds": provider_seconds,
             "sport_fusion_total_seconds": fusion_seconds,
             **equipment_performance,
+            **visual_performance,
             "total_seconds": time.perf_counter() - started,
         },
         "validation": {
             "REAL_SPORT_TYPE_STATUS": real_status,
-            "A6_1_ENGINEERING_VALIDATION": (
+            "A6_2_ENGINEERING_VALIDATION": (
                 "PASS"
-                if equipment_summary["overall_status"]
-                in {"EXECUTED_NO_EVIDENCE", "EXECUTED_WITH_EVIDENCE"}
+                if all(
+                    summary["overall_status"] in {"EXECUTED_NO_EVIDENCE", "EXECUTED_WITH_EVIDENCE"}
+                    for summary in (equipment_summary, visual_summary)
+                )
                 else "PASS_WITH_LIMITATIONS"
             ),
-            "A6_1_AUTO_CLASSIFICATION_VALIDATION": (
+            "A6_2_AUTO_CLASSIFICATION_VALIDATION": (
                 "ENGINEERING_EVIDENCE_ONLY"
                 if auto.primary_evidence_kinds
                 else "NOT_VALIDATED_NO_PRIMARY_EVIDENCE_ON_REAL_CLIP"
                 if equipment_summary["executed_provider_count"]
+                or visual_summary["executed_provider_count"]
                 else "NOT_VALIDATED_PROVIDER_UNAVAILABLE"
             ),
             "A6_PRODUCT_VALIDATION": "BLOCKED_BY_SPORT_TYPE_GT",
             "A7_ENGINEERING_READINESS": "READY_WITH_LIMITATIONS",
             "AUTO_SPORT_TYPE_PRODUCT_READINESS": (
                 "NOT_READY_GT_REQUIRED"
-                if auto.primary_evidence_kinds
+                if auto.sport_type is not SportType.UNKNOWN
+                else "NOT_READY_PRIMARY_EVIDENCE_COVERAGE_AND_GT_REQUIRED"
+                if executed_primary_provider_count
                 else "NOT_READY_PRIMARY_PROVIDER_REQUIRED"
             ),
         },
@@ -202,6 +258,7 @@ def benchmark_sport_type_frames(
         + ["NO_SPORT_TYPE_GROUND_TRUTH", "NO_DIAGNOSIS_OR_SCORE"],
         "_upstream_biomechanics_report": upstream,
         "_equipment_debug_frames": equipment_debug,
+        "_visual_debug_frames": visual_debug,
     }
     return report
 
@@ -211,7 +268,6 @@ def _equipment_execution_summary(providers, kind_summary):
     totals = {
         key: sum(getattr(provider, "last_summary", {}).get(key, 0) or 0 for provider in concrete)
         for key in (
-            "eligible_locked_context_count",
             "selected_equipment_context_count",
             "contexts_below_target_size_threshold",
             "equipment_inference_context_count",
@@ -238,13 +294,65 @@ def _equipment_execution_summary(providers, kind_summary):
         "EXECUTED_WITH_PRIMARY_EVIDENCE"
         if overall == "EXECUTED_WITH_EVIDENCE"
         else "EXECUTED_NO_ELIGIBLE_LOCKED_CONTEXTS"
-        if overall == "EXECUTED_NO_EVIDENCE" and totals["eligible_locked_context_count"] == 0
+        if overall == "EXECUTED_NO_EVIDENCE"
+        and all(
+            not (getattr(provider, "last_summary", {}).get("eligible_locked_context_count") or 0)
+            for provider in concrete
+        )
         else "EXECUTED_NO_ASSOCIATED_EQUIPMENT"
         if overall == "EXECUTED_NO_EVIDENCE"
         else "FAILED"
         if overall == "FAILED"
         else "NOT_CONFIGURED"
     )
+    totals["per_provider"] = [
+        {
+            "provider_name": provider.name,
+            **getattr(provider, "last_summary", {}),
+        }
+        for provider in concrete
+    ]
+    return totals
+
+
+def _visual_execution_summary(providers, kind_summary):
+    concrete = [provider for provider in providers if hasattr(provider, "last_summary")]
+    keys = (
+        "selected_visual_context_count",
+        "contexts_below_target_size_threshold",
+        "visual_inference_context_count",
+        "frames_visual_favors_ski",
+        "frames_visual_favors_snowboard",
+        "frames_visual_favors_neutral",
+        "visual_observation_count",
+    )
+    totals = {
+        key: sum(getattr(provider, "last_summary", {}).get(key, 0) or 0 for provider in concrete)
+        for key in keys
+    }
+    for key in (
+        "mean_ski_support",
+        "median_ski_support",
+        "mean_snowboard_support",
+        "median_snowboard_support",
+        "mean_neutral_support",
+        "median_neutral_support",
+    ):
+        values = [
+            provider.last_summary[key]
+            for provider in concrete
+            if getattr(provider, "last_summary", {}).get(key) is not None
+        ]
+        totals[key] = sum(values) / len(values) if values else None
+    totals["per_provider"] = [
+        {"provider_name": provider.name, **getattr(provider, "last_summary", {})}
+        for provider in concrete
+    ]
+    totals["REAL_PRIMARY_VISUAL_EVIDENCE_STATUS"] = {
+        "EXECUTED_WITH_EVIDENCE": "EXECUTED_WITH_PRIMARY_EVIDENCE",
+        "EXECUTED_NO_EVIDENCE": "EXECUTED_NO_VISUAL_EVIDENCE",
+        "FAILED": "FAILED",
+    }.get(kind_summary["overall_status"], "NOT_CONFIGURED")
     return totals
 
 
@@ -281,6 +389,39 @@ def _equipment_performance(providers):
             item.get("equipment_association_total_seconds") or 0.0 for item in values
         ),
     }
+
+
+def _visual_performance(providers):
+    values = [getattr(provider, "last_performance", {}) for provider in providers]
+    return {
+        "visual_model_load_seconds": _optional_sum(values, "visual_model_load_seconds"),
+        "visual_text_prototype_seconds": _optional_sum(values, "visual_text_prototype_seconds"),
+        "visual_inference_total_seconds": sum(
+            item.get("visual_inference_total_seconds") or 0.0 for item in values
+        ),
+        "visual_mean_inference_seconds": _optional_mean(values, "visual_mean_inference_seconds"),
+        "visual_p95_inference_seconds": next(
+            (
+                item["visual_p95_inference_seconds"]
+                for item in values
+                if item.get("visual_p95_inference_seconds") is not None
+            ),
+            None,
+        ),
+    }
+
+
+def _optional_sum(values, key):
+    return (
+        sum(item.get(key) or 0.0 for item in values)
+        if any(item.get(key) is not None for item in values)
+        else None
+    )
+
+
+def _optional_mean(values, key):
+    present = [item[key] for item in values if item.get(key) is not None]
+    return sum(present) / len(present) if present else None
 
 
 def _real_status(result):

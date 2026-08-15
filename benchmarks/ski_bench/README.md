@@ -168,6 +168,23 @@ normal CI does not need OpenMMLab. `sport-equipment-doctor` verifies the checkpo
 load, 80-class metadata, and required names before real use. Historical v1 artifacts are not
 rewritten.
 
+A6.2 advances new artifacts to `ski-bench-sport-type-v3` while retaining the compatible
+`sport-type-v1` domain contract. A pinned official OpenAI CLIP `ViT-B/32` zero-shot provider
+classifies only deterministic crops around `LOCKED` targets; the full frame is never classified.
+Fixed English `SKI`, `SNOWBOARD`, and `NEUTRAL` prompt groups are fingerprinted under
+`visual-sport-prompts-v1`. Neutral support stays diagnostic and never becomes a SportType.
+
+Equipment and visual providers execute independently and failures are isolated. Their frame
+observations enter the unchanged `ReferenceSportTypeFusion`. Reports expose equipment-only,
+visual-only, and combined diagnostic decisions without rerunning models; only combined evidence
+plus optional user override controls the effective result. Dataset LOCKED-context counts are
+unique and distinct from per-provider selected/inferred counts.
+
+CLIP remains optional in the ignored Python 3.11 runtime. The checkpoint must be prepared and
+passed explicitly; normal CI is CLIP-free and network-free. Zero-shot supports are not calibrated
+probabilities, results depend on the fixed prompt taxonomy, and no accuracy claim is possible
+while `SPORT_TYPE_GT_STATUS = NOT_AVAILABLE`. One local source clip is engineering evidence only.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

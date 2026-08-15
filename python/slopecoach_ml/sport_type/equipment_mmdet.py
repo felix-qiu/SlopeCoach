@@ -19,6 +19,7 @@ from .contracts import (
     SportEvidenceProviderStatus,
     SportEvidenceScope,
 )
+from .providers import select_sport_frame_contexts, sport_evidence_id
 
 EQUIPMENT_PROVIDER_NAME = "openmmlab-rtmdet-tiny-coco-equipment"
 EQUIPMENT_CONFIG_PROFILE = "RESEARCH_DEFAULTS_A6_1"
@@ -42,10 +43,9 @@ class EquipmentSportEvidenceConfig:
     association_width_scale: float = 1.5
     association_top_ratio: float = 0.40
     association_bottom_extension_ratio: float = 0.40
-    minimum_associated_equipment_observations: int = 2
 
     def __post_init__(self) -> None:
-        for name in ("max_frame_contexts", "minimum_associated_equipment_observations"):
+        for name in ("max_frame_contexts",):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
@@ -295,7 +295,9 @@ class MMDetEquipmentSportEvidenceProvider:
         }
         observation = (
             SportEvidenceObservation(
-                evidence_id=f"equipment-{context.timestamp_us}-{context.frame_index}",
+                evidence_id=sport_evidence_id(
+                    self.kind, self.name, context.timestamp_us, context.frame_index
+                ),
                 kind=SportEvidenceKind.EQUIPMENT,
                 provider_name=self.name,
                 timestamp_us=context.timestamp_us,
@@ -338,24 +340,11 @@ class MMDetEquipmentSportEvidenceProvider:
 
 
 def select_equipment_contexts(contexts, config: EquipmentSportEvidenceConfig):
-    by_timestamp = {}
-    for context in sorted(contexts, key=lambda item: (item.timestamp_us, item.frame_index)):
-        by_timestamp.setdefault(context.timestamp_us, context)
-    distinct = tuple(by_timestamp.values())
-    eligible = tuple(
-        item
-        for item in distinct
-        if item.target_bbox.height_px / item.geometry.height_px
-        >= config.minimum_target_bbox_height_ratio
+    return select_sport_frame_contexts(
+        contexts,
+        max_frame_contexts=config.max_frame_contexts,
+        minimum_target_bbox_height_ratio=config.minimum_target_bbox_height_ratio,
     )
-    below = len(distinct) - len(eligible)
-    if len(eligible) <= config.max_frame_contexts:
-        return eligible, eligible, below
-    count = config.max_frame_contexts
-    if count == 1:
-        return eligible, (eligible[0],), below
-    indices = tuple(index * (len(eligible) - 1) // (count - 1) for index in range(count))
-    return eligible, tuple(eligible[index] for index in indices), below
 
 
 def equipment_crop_bbox(context, config: EquipmentSportEvidenceConfig) -> BoundingBox2D:

@@ -16,6 +16,46 @@ from .contracts import (
 )
 
 
+def sport_evidence_id(
+    kind: SportEvidenceKind,
+    provider_name: str,
+    timestamp_us: int,
+    frame_index: int,
+) -> str:
+    """Return a deterministic provider-qualified frame evidence identifier."""
+
+    return f"{kind.value}:{provider_name}:{timestamp_us}:{frame_index}"
+
+
+def select_sport_frame_contexts(
+    contexts,
+    *,
+    max_frame_contexts: int,
+    minimum_target_bbox_height_ratio: float,
+):
+    """Select distinct LOCKED contexts deterministically and evenly across time."""
+
+    by_timestamp = {}
+    for context in sorted(contexts, key=lambda item: (item.timestamp_us, item.frame_index)):
+        by_timestamp.setdefault(context.timestamp_us, context)
+    distinct = tuple(by_timestamp.values())
+    eligible = tuple(
+        item
+        for item in distinct
+        if item.target_bbox.height_px / item.geometry.height_px >= minimum_target_bbox_height_ratio
+    )
+    below = len(distinct) - len(eligible)
+    if len(eligible) <= max_frame_contexts:
+        return eligible, eligible, below
+    if max_frame_contexts == 1:
+        return eligible, (eligible[0],), below
+    indices = tuple(
+        index * (len(eligible) - 1) // (max_frame_contexts - 1)
+        for index in range(max_frame_contexts)
+    )
+    return eligible, tuple(eligible[index] for index in indices), below
+
+
 def execute_sport_evidence_providers(
     providers, frame_contexts: tuple[TargetSportFrameContext, ...]
 ) -> tuple[SportEvidenceProviderResult, ...]:
@@ -140,6 +180,24 @@ class NotConfiguredEquipmentSportEvidenceProvider(NotConfiguredSportEvidenceProv
 class NotConfiguredVisualSportEvidenceProvider(NotConfiguredSportEvidenceProvider):
     def __init__(self) -> None:
         super().__init__("visual-sport-provider", SportEvidenceKind.VISUAL_CLASSIFIER)
+
+
+@dataclass(frozen=True)
+class FailedSportEvidenceProvider:
+    """Configured provider whose initialization failed before benchmark execution."""
+
+    name: str
+    kind: SportEvidenceKind
+    error: str
+    execution_scope: str = "FRAME"
+
+    def infer(self, context: Any = None) -> SportEvidenceProviderResult:
+        return SportEvidenceProviderResult(
+            provider_name=self.name,
+            evidence_kind=self.kind,
+            status=SportEvidenceProviderStatus.FAILED,
+            error=self.error,
+        )
 
 
 @dataclass(frozen=True)

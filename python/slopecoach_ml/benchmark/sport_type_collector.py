@@ -1,4 +1,4 @@
-"""Single-pass collector for A6.1 LOCKED target equipment contexts."""
+"""Single-pass collector for A6.2 LOCKED target equipment and visual contexts."""
 
 from __future__ import annotations
 

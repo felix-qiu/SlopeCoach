@@ -40,6 +40,7 @@ def test_model_registry_parsing_and_provenance_serialization() -> None:
         "rtmdet-m-640-coco-obj365-person",
         "rtmdet-tiny-640-coco-equipment",
         "rtmw-l-cocktail14-256x192",
+        "openai-clip-vit-b32-visual-sport",
     }
     pose = registry["rtmw-l-cocktail14-256x192"]
     assert pose.framework_version == "1.3.2"
@@ -47,6 +48,10 @@ def test_model_registry_parsing_and_provenance_serialization() -> None:
     assert ModelMetadata.from_dict(pose.to_dict()) == pose
     assert pose.checkpoint_license is None
     assert len(pose.checkpoint_sha256 or "") == 64
+    visual = registry["openai-clip-vit-b32-visual-sport"]
+    assert visual.model_family == "CLIP"
+    assert visual.checkpoint_license is None
+    assert visual.model_version == "d05afc436d78f1c48dc0dbf8e5980a9d471f35f6"
 
 
 def test_registry_rejects_malformed_checkpoint_hash(tmp_path) -> None:
