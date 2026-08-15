@@ -17,6 +17,18 @@ from .contracts import (
     SportTypeSource,
 )
 from .cues import extract_uncalibrated_sport_cues
+from .equipment_mmdet import (
+    EQUIPMENT_CONFIG_PROFILE,
+    EQUIPMENT_PROVIDER_NAME,
+    EquipmentSportEvidenceConfig,
+    MMDetEquipmentSportEvidenceProvider,
+    OpenMMLabEquipmentBackend,
+    equipment_association_zone,
+    equipment_crop_bbox,
+    equipment_provider_doctor,
+    select_equipment_contexts,
+    sha256_file,
+)
 from .fusion import ReferenceSportTypeFusion
 from .golden import run_sport_type_golden
 from .pipeline import resolve_sport_type, sport_specific_analysis_allowed
@@ -26,6 +38,8 @@ from .providers import (
     NotConfiguredVisualSportEvidenceProvider,
     SportEvidenceProvider,
     TargetSportFrameContext,
+    execute_sport_evidence_providers,
+    summarize_provider_kind,
 )
 
 __all__ = [
@@ -33,9 +47,14 @@ __all__ = [
     "SPORT_TYPE_CONFIG_PROFILE",
     "SPORT_TYPE_REQUIRED_REASON",
     "AutoSportTypeDecision",
+    "EQUIPMENT_CONFIG_PROFILE",
+    "EQUIPMENT_PROVIDER_NAME",
+    "EquipmentSportEvidenceConfig",
+    "MMDetEquipmentSportEvidenceProvider",
     "MockSportEvidenceProvider",
     "NotConfiguredEquipmentSportEvidenceProvider",
     "NotConfiguredVisualSportEvidenceProvider",
+    "OpenMMLabEquipmentBackend",
     "ReferenceSportTypeFusion",
     "SportCueMeasurement",
     "SportCueStatus",
@@ -52,7 +71,14 @@ __all__ = [
     "SportTypeSource",
     "TargetSportFrameContext",
     "extract_uncalibrated_sport_cues",
+    "equipment_association_zone",
+    "equipment_crop_bbox",
+    "equipment_provider_doctor",
+    "execute_sport_evidence_providers",
     "resolve_sport_type",
     "run_sport_type_golden",
     "sport_specific_analysis_allowed",
+    "select_equipment_contexts",
+    "sha256_file",
+    "summarize_provider_kind",
 ]

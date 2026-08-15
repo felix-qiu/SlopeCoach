@@ -10,6 +10,7 @@ from typing import Any
 
 from slopecoach_ml.benchmark import (
     RealPoseDebugCollector,
+    SportTypeBenchmarkCollector,
     TargetIdentityDebugCollector,
     TemporalTurnCollector,
     benchmark_biomechanics_frames,
@@ -44,7 +45,15 @@ from slopecoach_ml.reference import (
     analyze_pose_frame,
     load_golden_fixture,
 )
-from slopecoach_ml.sport_type import SportType, run_sport_type_golden
+from slopecoach_ml.sport_type import (
+    MMDetEquipmentSportEvidenceProvider,
+    NotConfiguredVisualSportEvidenceProvider,
+    OpenMMLabEquipmentBackend,
+    SportType,
+    equipment_provider_doctor,
+    run_sport_type_golden,
+    sha256_file,
+)
 from slopecoach_ml.temporal import run_temporal_golden, run_turn_golden
 from slopecoach_ml.video import OpenCVVideoSampler, inspect_video
 
@@ -80,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("input")
     benchmark.add_argument("--output")
     subparsers.add_parser("pose-doctor", help="inspect optional OpenMMLab provider readiness")
+    equipment_doctor = subparsers.add_parser(
+        "sport-equipment-doctor", help="validate the optional full-COCO equipment provider"
+    )
+    equipment_doctor.add_argument("--equipment-config")
+    equipment_doctor.add_argument("--equipment-checkpoint")
     pose_image = subparsers.add_parser(
         "pose-image", help="run configured RTMDet + RTMW-L on an image"
     )
@@ -166,6 +180,9 @@ def build_parser() -> argparse.ArgumentParser:
     sport_type.add_argument("video")
     sport_type.add_argument("--sample-fps", type=float, default=5.0)
     sport_type.add_argument("--sport-type", choices=("auto", "ski", "snowboard"), default="auto")
+    sport_type.add_argument("--equipment-provider", choices=("none", "rtmdet-coco"), default="none")
+    sport_type.add_argument("--equipment-config")
+    sport_type.add_argument("--equipment-checkpoint")
     sport_type.add_argument("--output")
     sport_type.add_argument("--debug-dir")
     sport_type.add_argument("--max-debug-frames", type=int, default=12)
@@ -342,6 +359,20 @@ def main(argv: list[str] | None = None) -> int:
         report = openmmlab_preflight()
         _write_json(report, None)
         return 0 if report["OPENMMLAB_PREFLIGHT"]["status"] == "READY" else 3
+    if args.command == "sport-equipment-doctor":
+        config_path = args.equipment_config or os.getenv("SLOPECOACH_EQUIPMENT_DETECTOR_CONFIG")
+        checkpoint_path = args.equipment_checkpoint or os.getenv(
+            "SLOPECOACH_EQUIPMENT_DETECTOR_CHECKPOINT"
+        )
+        expected_sha = _equipment_registry_sha()
+        report = equipment_provider_doctor(
+            config_path,
+            checkpoint_path,
+            device=configured_device(),
+            expected_checkpoint_sha256=expected_sha,
+        )
+        _write_json(report, None)
+        return 0 if report["EQUIPMENT_SPORT_PROVIDER_READINESS"].startswith("READY") else 3
     if args.command == "pose-image":
         if not args.input_non_mirrored:
             raise RuntimeError(
@@ -515,7 +546,11 @@ def main(argv: list[str] | None = None) -> int:
             "benchmark-biomechanics",
             "benchmark-sport-type",
         }:
-            collector = TemporalTurnCollector(keep_images=bool(args.debug_dir))
+            collector = (
+                SportTypeBenchmarkCollector(keep_images=bool(args.debug_dir))
+                if args.command == "benchmark-sport-type"
+                else TemporalTurnCollector(keep_images=bool(args.debug_dir))
+            )
             identity_template = (
                 _root()
                 / "benchmarks/ski_bench/annotations"
@@ -551,6 +586,11 @@ def main(argv: list[str] | None = None) -> int:
                     "ski": SportType.SKI,
                     "snowboard": SportType.SNOWBOARD,
                 }[args.sport_type]
+                if args.equipment_provider == "rtmdet-coco":
+                    runner_kwargs["evidence_providers"] = (
+                        _equipment_provider(args),
+                        NotConfiguredVisualSportEvidenceProvider(),
+                    )
             report = benchmark_runner(**runner_kwargs)
             report["debug_artifacts"] = (
                 (
@@ -571,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             report.pop("_upstream_biomechanics_report", None)
+            report.pop("_equipment_debug_frames", None)
             report.pop("_upstream_debug_report", None)
             _write_json(report, args.output)
             return 0
@@ -643,6 +684,42 @@ def main(argv: list[str] | None = None) -> int:
     report = benchmark_video(input_path)
     _write_json(report, args.output)
     return 0 if report["video_metadata"]["readable"] else 2
+
+
+def _equipment_registry_sha() -> str | None:
+    registry = load_model_registry(_root() / "models/registry.json")
+    model = registry.get("rtmdet-tiny-640-coco-equipment")
+    return model.checkpoint_sha256 if model else None
+
+
+def _equipment_provider(args):
+    config_path = args.equipment_config or os.getenv("SLOPECOACH_EQUIPMENT_DETECTOR_CONFIG")
+    checkpoint_path = args.equipment_checkpoint or os.getenv(
+        "SLOPECOACH_EQUIPMENT_DETECTOR_CHECKPOINT"
+    )
+    if not config_path or not Path(config_path).is_file():
+        raise RuntimeError("EQUIPMENT_MODEL_CONFIG_MISSING")
+    if not checkpoint_path or not Path(checkpoint_path).is_file():
+        raise RuntimeError("EQUIPMENT_MODEL_CHECKPOINT_MISSING")
+    actual_sha = sha256_file(checkpoint_path)
+    registry_model = load_model_registry(_root() / "models/registry.json").get(
+        "rtmdet-tiny-640-coco-equipment"
+    )
+    expected_sha = registry_model.checkpoint_sha256 if registry_model else None
+    if expected_sha and actual_sha != expected_sha:
+        raise RuntimeError("EQUIPMENT_CHECKPOINT_SHA256_MISMATCH")
+    device = configured_device()
+    backend = OpenMMLabEquipmentBackend(config_path, checkpoint_path, device=device)
+    return MMDetEquipmentSportEvidenceProvider(
+        backend,
+        device=device,
+        config_path=config_path,
+        config_source=registry_model.config_source if registry_model else None,
+        checkpoint_path=checkpoint_path,
+        checkpoint_source=registry_model.checkpoint_source if registry_model else None,
+        checkpoint_sha256=actual_sha,
+        model_load_seconds=backend.model_load_seconds,
+    )
 
 
 if __name__ == "__main__":

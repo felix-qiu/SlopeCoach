@@ -38,6 +38,7 @@ def test_model_registry_parsing_and_provenance_serialization() -> None:
     registry = load_model_registry(REGISTRY)
     assert set(registry) == {
         "rtmdet-m-640-coco-obj365-person",
+        "rtmdet-tiny-640-coco-equipment",
         "rtmw-l-cocktail14-256x192",
     }
     pose = registry["rtmw-l-cocktail14-256x192"]

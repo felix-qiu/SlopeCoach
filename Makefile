@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden benchmark pose-doctor pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden benchmark pose-doctor sport-equipment-doctor pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -43,6 +43,9 @@ benchmark:
 pose-doctor:
 	$(UV) run --project python python -m slopecoach_ml.cli pose-doctor
 
+sport-equipment-doctor:
+	$(if $(OPENML_PY),PYTHONPATH=python $(OPENML_PY),$(UV) run --project python python) -m slopecoach_ml.cli sport-equipment-doctor $(if $(EQUIPMENT_CONFIG),--equipment-config "$(EQUIPMENT_CONFIG)",) $(if $(EQUIPMENT_CHECKPOINT),--equipment-checkpoint "$(EQUIPMENT_CHECKPOINT)",)
+
 pose-smoke:
 	@test -n "$(IMAGE)" || (echo 'usage: make pose-smoke IMAGE=/path/to/image' >&2; exit 2)
 	$(UV) run --project python python -m slopecoach_ml.cli pose-image "$(IMAGE)" --input-non-mirrored
@@ -65,7 +68,7 @@ benchmark-biomechanics:
 
 benchmark-sport-type:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-sport-type VIDEO=/path/to/video' >&2; exit 2)
-	$(UV) run --project python python -m slopecoach_ml.cli benchmark-sport-type "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --sport-type "$(or $(SPORT_TYPE),auto)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+	$(if $(OPENML_PY),PYTHONPATH=python $(OPENML_PY),$(UV) run --project python python) -m slopecoach_ml.cli benchmark-sport-type "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --sport-type "$(or $(SPORT_TYPE),auto)" --equipment-provider "$(or $(EQUIPMENT_PROVIDER),none)" --input-non-mirrored $(if $(EQUIPMENT_CONFIG),--equipment-config "$(EQUIPMENT_CONFIG)",) $(if $(EQUIPMENT_CHECKPOINT),--equipment-checkpoint "$(EQUIPMENT_CHECKPOINT)",) $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
 
 prepare-biomechanics-dataset:
 	@test -n "$(VIDEO_DIR)" || (echo 'usage: make prepare-biomechanics-dataset VIDEO_DIR=benchmarks/ski_bench/videos OUTPUT=artifacts/manifests/biomechanics_real.local.json' >&2; exit 2)

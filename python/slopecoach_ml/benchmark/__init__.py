@@ -15,6 +15,7 @@ from .real_pose import (
     select_debug_frame_indices,
 )
 from .sport_type import SPORT_TYPE_BENCHMARK_CONTRACT_VERSION, benchmark_sport_type_frames
+from .sport_type_collector import SportTypeBenchmarkCollector
 from .sport_type_debug import write_sport_type_debug_artifacts
 from .target_debug import (
     TargetIdentityDebugCollector,
@@ -42,6 +43,7 @@ __all__ = [
     "write_biomechanics_debug_artifacts",
     "write_sport_type_debug_artifacts",
     "SPORT_TYPE_BENCHMARK_CONTRACT_VERSION",
+    "SportTypeBenchmarkCollector",
     "select_target_debug_indices",
     "write_ground_truth_comparison",
     "benchmark_video",

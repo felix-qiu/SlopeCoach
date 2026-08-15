@@ -38,6 +38,25 @@
       "checkpoint_license": null,
       "training_metadata": "Cocktail14 whole-body training mixture; see official config/model card.",
       "notes": "Checkpoint licensing is left null because the official model listing does not state a separate checkpoint license."
+    },
+    {
+      "provider": "OpenMMLab MMDetection",
+      "framework": "MMDetection",
+      "framework_version": "3.2.0",
+      "model_family": "RTMDet",
+      "model_id": "rtmdet-tiny-640-coco-equipment",
+      "model_version": "20220902_112414-78e30dcc",
+      "task": "sport-equipment-detection",
+      "input_size": [640, 640],
+      "joint_schema": null,
+      "config_source": "https://github.com/open-mmlab/mmdetection/blob/v3.2.0/configs/rtmdet/rtmdet_tiny_8xb32-300e_coco.py",
+      "checkpoint_source": "https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth",
+      "checkpoint_filename": "rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth",
+      "checkpoint_sha256": "78e30dcce0c6f594eaff0d6977b84b4103688b4aff0ad1aa16008a8cc854a7fb",
+      "code_license": "Apache-2.0",
+      "checkpoint_license": null,
+      "training_metadata": "Full COCO object detector; equipment evidence uses dynamically resolved skis and snowboard class names.",
+      "notes": "A6.1 research equipment evidence provider; class indices are runtime metadata and are never hard-coded."
     }
   ]
 }

@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A6: SportType Foundation & Auto/User Resolution**. The code in
+SlopeCoach is currently in **Phase A6.1: Primary Equipment Evidence Integration**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -409,6 +409,47 @@ The `ski-bench-sport-type-v1` benchmark composes the existing single-pass A5.1 p
 not rerun RTMDet/RTMW or infer from filenames. Generic pose and image-space biomechanics remain
 available when SportType is `UNKNOWN`; only future sport-specific analysis is gated.
 `SPORT_TYPE_GT_STATUS = NOT_AVAILABLE`, so accuracy, precision, and recall remain JSON `null`.
+
+### A6.1 real primary equipment evidence
+
+A6.1 adds the first real primary SportType evidence provider. The existing
+`rtmdet-m-640-coco-obj365-person` remains an unchanged person-only detector. A separate official
+full-COCO `rtmdet_tiny_8xb32-300e_coco` provider detects only the `skis` and `snowboard` classes
+for SportType evidence. Their indices are resolved dynamically from `model.dataset_meta["classes"]`;
+no numeric COCO class IDs are hard-coded.
+
+Only `LOCKED` target frames are eligible. The single-pass identity observer retains those target
+contexts, deterministically selects at most 12 distinct timestamps, constructs a wider/lower
+source-frame crop, maps detections back to `SourcePixel2D`, and accepts equipment whose center is
+inside a target-relative association zone. That association is geometric only and has no
+equipment-to-person GT. Detector scores are engineering support—not calibrated SportType
+probabilities. Zero detections emit no fake observation, and `UNKNOWN` remains valid.
+
+The provider is optional and never auto-enabled merely because weights exist. Normal Python 3.12
+CI remains OpenMMLab-, video-, checkpoint-, and network-free. Validate and run it explicitly in
+the isolated runtime:
+
+```bash
+PYTHONPATH=python artifacts/openmmlab-venv/bin/python -m slopecoach_ml.cli \
+  sport-equipment-doctor \
+  --equipment-config /path/to/rtmdet_tiny_8xb32-300e_coco.py \
+  --equipment-checkpoint /path/to/rtmdet_tiny_checkpoint.pth
+
+PYTHONPATH=python artifacts/openmmlab-venv/bin/python -m slopecoach_ml.cli \
+  benchmark-sport-type benchmarks/ski_bench/videos/ski_test_001.mp4 \
+  --sample-fps 5 --input-non-mirrored --sport-type auto \
+  --equipment-provider rtmdet-coco \
+  --equipment-config /path/to/rtmdet_tiny_8xb32-300e_coco.py \
+  --equipment-checkpoint /path/to/rtmdet_tiny_checkpoint.pth \
+  --output artifacts/benchmarks/a6_1/ski_test_001_5fps.json \
+  --debug-dir artifacts/debug/a6_1_sport_type/ski_test_001_5fps
+```
+
+The v2 benchmark aggregates every provider of the same evidence kind, keeps failures separately,
+and conditionally reports provider limitations. Equipment evidence always flows through the
+existing `ReferenceSportTypeFusion`; it never directly assigns SKI/SNOWBOARD. User override still
+wins while retaining the auto decision. SportType GT, diagnosis, scoring, and product accuracy
+validation remain unavailable.
 
 ## Provider status and deferred work
 

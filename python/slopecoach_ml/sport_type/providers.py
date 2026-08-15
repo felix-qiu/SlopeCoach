@@ -16,6 +16,61 @@ from .contracts import (
 )
 
 
+def execute_sport_evidence_providers(
+    providers, frame_contexts: tuple[TargetSportFrameContext, ...]
+) -> tuple[SportEvidenceProviderResult, ...]:
+    """Execute providers independently so one failure cannot erase other evidence."""
+
+    results = []
+    for provider in providers:
+        try:
+            context = (
+                frame_contexts if getattr(provider, "execution_scope", "CLIP") == "FRAME" else None
+            )
+            results.append(provider.infer(context))
+        except Exception as error:
+            results.append(
+                SportEvidenceProviderResult(
+                    provider_name=provider.name,
+                    evidence_kind=provider.kind,
+                    status=SportEvidenceProviderStatus.FAILED,
+                    error=f"{type(error).__name__}: {error}",
+                )
+            )
+    return tuple(results)
+
+
+def summarize_provider_kind(results, kind: SportEvidenceKind) -> dict[str, object]:
+    matching = tuple(item for item in results if item.evidence_kind is kind)
+    statuses = [item.status for item in matching]
+    with_evidence = statuses.count(SportEvidenceProviderStatus.EXECUTED_WITH_EVIDENCE)
+    successfully_executed = with_evidence + statuses.count(
+        SportEvidenceProviderStatus.EXECUTED_NO_EVIDENCE
+    )
+    configured = sum(item is not SportEvidenceProviderStatus.NOT_CONFIGURED for item in statuses)
+    failed = statuses.count(SportEvidenceProviderStatus.FAILED)
+    if with_evidence:
+        overall = SportEvidenceProviderStatus.EXECUTED_WITH_EVIDENCE
+    elif successfully_executed:
+        overall = SportEvidenceProviderStatus.EXECUTED_NO_EVIDENCE
+    elif configured and failed == configured:
+        overall = SportEvidenceProviderStatus.FAILED
+    elif configured:
+        overall = SportEvidenceProviderStatus.CONFIGURED
+    else:
+        overall = SportEvidenceProviderStatus.NOT_CONFIGURED
+    return {
+        "evidence_kind": kind.value,
+        "overall_status": overall.value,
+        "provider_count": len(matching),
+        "configured_provider_count": configured,
+        "executed_provider_count": successfully_executed,
+        "provider_with_evidence_count": with_evidence,
+        "failed_provider_count": failed,
+        "observation_count": sum(len(item.observations) for item in matching),
+    }
+
+
 class SportEvidenceProvider(Protocol):
     name: str
     kind: SportEvidenceKind

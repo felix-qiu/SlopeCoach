@@ -149,6 +149,25 @@ SportType GT is unavailable, so accuracy, precision, and recall remain null. A r
 is an honest provider-availability outcome, not a failed execution. A6 produces no diagnosis or
 score and does not reinterpret turn phase signs as skiing left/right.
 
+A6.1 advances new reports to `ski-bench-sport-type-v2` while retaining the `sport-type-v1` domain
+contract. A separate full-COCO RTMDet-tiny equipment provider operates only on deterministic
+`LOCKED` target contexts collected during the existing single upstream pass. It does not modify or
+reuse the person detector as an equipment classifier. Runtime class names `skis` and `snowboard`
+are resolved from model metadata, never numeric constants.
+
+The target crop extends wider and lower than the person bbox. Equipment detections are mapped back
+to SourcePixel2D and accepted only when their centers enter a target-relative geometric association
+zone. Debug output distinguishes the target, crop, zone, and accepted detections and labels them
+`EQUIPMENT EVIDENCE ONLY`. Association correctness and SportType accuracy remain unknown without
+GT. The default research configuration evaluates at most 12 evenly-spaced eligible locked frames
+with score threshold 0.25; these values are not tuned to the local clip.
+
+Use `--equipment-provider rtmdet-coco` plus explicit config/checkpoint paths (or the matching
+`SLOPECOACH_EQUIPMENT_DETECTOR_*` environment variables). The model is never auto-enabled and
+normal CI does not need OpenMMLab. `sport-equipment-doctor` verifies the checkpoint hash, model
+load, 80-class metadata, and required names before real use. Historical v1 artifacts are not
+rewritten.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

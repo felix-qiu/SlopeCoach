@@ -262,9 +262,25 @@ class AutoSportTypeDecision:
             value is None for value in support_values
         ):
             raise ValueError("auto support values must be all null or all non-null")
+        if self.status is SportTypeResolutionStatus.RESOLVED_USER:
+            raise ValueError("AutoSportTypeDecision cannot have RESOLVED_USER status")
+        if self.margin is not None and not math.isclose(
+            self.margin,
+            abs(self.ski_support - self.snowboard_support),
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("margin must equal abs(ski_support - snowboard_support)")
         if self.status is SportTypeResolutionStatus.RESOLVED_AUTO:
             if self.sport_type is SportType.UNKNOWN or self.ask_user_recommended:
                 raise ValueError("resolved auto decision must select a sport without asking user")
+            if self.sport_type is SportType.SKI and self.ski_support <= self.snowboard_support:
+                raise ValueError("resolved SKI requires ski_support > snowboard_support")
+            if (
+                self.sport_type is SportType.SNOWBOARD
+                and self.snowboard_support <= self.ski_support
+            ):
+                raise ValueError("resolved SNOWBOARD requires snowboard_support > ski_support")
         elif self.sport_type is not SportType.UNKNOWN or not self.ask_user_recommended:
             raise ValueError("unresolved auto decision must be UNKNOWN and recommend user input")
 

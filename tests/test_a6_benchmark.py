@@ -4,6 +4,13 @@ import json
 
 from slopecoach_ml.benchmark import sport_type as module
 from slopecoach_ml.biomechanics import FEATURE_REGISTRY_SHA256
+from slopecoach_ml.sport_type import (
+    MockSportEvidenceProvider,
+    NotConfiguredVisualSportEvidenceProvider,
+    SportEvidenceKind,
+    SportEvidenceObservation,
+    SportEvidenceScope,
+)
 
 
 def _upstream_report():
@@ -53,7 +60,7 @@ def test_benchmark_reports_honest_provider_gt_and_gate(monkeypatch):
         detector_model={},
         pose_model={},
     )
-    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v1"
+    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v2"
     assert report["sport_type"]["effective_sport_type"] == "UNKNOWN"
     assert report["sport_type"]["resolution_status"] == "INSUFFICIENT_PRIMARY_EVIDENCE"
     assert report["sport_type"]["config"]["profile"] == "RESEARCH_DEFAULTS_A6"
@@ -74,3 +81,40 @@ def test_benchmark_reports_honest_provider_gt_and_gate(monkeypatch):
         == FEATURE_REGISTRY_SHA256
     )
     json.dumps(report, allow_nan=False, sort_keys=True)
+
+
+def test_executed_equipment_provider_removes_only_equipment_limitation(monkeypatch):
+    monkeypatch.setattr(
+        module, "benchmark_biomechanics_frames", lambda **kwargs: _upstream_report()
+    )
+    observations = tuple(
+        SportEvidenceObservation(
+            f"equipment-{timestamp}",
+            SportEvidenceKind.EQUIPMENT,
+            "mock-equipment",
+            0.9,
+            0.0,
+            1.0,
+            SportEvidenceScope.FRAME,
+            timestamp_us=timestamp,
+        )
+        for timestamp in (0, 200000)
+    )
+    report = module.benchmark_sport_type_frames(
+        input_path="ski_test_001.mp4",
+        frames=(),
+        detector=None,
+        pose_provider=None,
+        detector_model={},
+        pose_model={},
+        evidence_providers=(
+            MockSportEvidenceProvider(
+                "mock-equipment", SportEvidenceKind.EQUIPMENT, observations
+            ),
+            NotConfiguredVisualSportEvidenceProvider(),
+        ),
+    )
+    assert "NO_CONFIGURED_EQUIPMENT_CLASSIFIER" not in report["limitations"]
+    assert "NO_CONFIGURED_VISUAL_SPORT_CLASSIFIER" in report["limitations"]
+    summary = report["provider_validation"]["provider_kind_summaries"][0]
+    assert summary["overall_status"] == "EXECUTED_WITH_EVIDENCE"
