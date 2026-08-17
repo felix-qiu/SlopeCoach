@@ -185,6 +185,14 @@ passed explicitly; normal CI is CLIP-free and network-free. Zero-shot supports a
 probabilities, results depend on the fixed prompt taxonomy, and no accuracy claim is possible
 while `SPORT_TYPE_GT_STATUS = NOT_AVAILABLE`. One local source clip is engineering evidence only.
 
+A6.3 advances new artifacts to `ski-bench-sport-type-v4` without changing the RAW_V1 effective
+routing result. Provider frame observations are quality-weighted into one source sample per
+`KIND::provider_name` channel. A separate research-only calibrated diagnostic uses manual
+`sport-type-gt-v1` labels, provider-specific Platt transforms, grouped source-level OOF
+evaluation, and same-kind-mean/cross-kind-sum estimated LLR fusion. Generated GT starts
+UNLABELED/UNCONFIRMED, and no calibration is fitted until both classes meet the independent-source
+minimum. The existing A6.2 v3 artifact can be extracted without rerunning any vision model.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

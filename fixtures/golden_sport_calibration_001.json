@@ -1,0 +1,46 @@
+{
+  "contract_version": "calibrated-sport-fusion-v1",
+  "cases": [
+    {
+      "case_id": "snowboard-agreement",
+      "provider_llrs": [
+        {"evidence_kind": "EQUIPMENT", "llr": 1.0},
+        {"evidence_kind": "VISUAL_CLASSIFIER", "llr": 1.5}
+      ],
+      "expected_fused_log_odds": 2.5,
+      "expected_snowboard_probability": 0.9241418199787566,
+      "expected_agreement_state": "AGREE_SNOWBOARD"
+    },
+    {
+      "case_id": "ski-agreement",
+      "provider_llrs": [
+        {"evidence_kind": "EQUIPMENT", "llr": -1.0},
+        {"evidence_kind": "VISUAL_CLASSIFIER", "llr": -1.5}
+      ],
+      "expected_fused_log_odds": -2.5,
+      "expected_snowboard_probability": 0.07585818002124356,
+      "expected_agreement_state": "AGREE_SKI"
+    },
+    {
+      "case_id": "strong-conflict",
+      "provider_llrs": [
+        {"evidence_kind": "EQUIPMENT", "llr": -2.0},
+        {"evidence_kind": "VISUAL_CLASSIFIER", "llr": 2.0}
+      ],
+      "expected_fused_log_odds": 0.0,
+      "expected_snowboard_probability": 0.5,
+      "expected_agreement_state": "CONFLICT"
+    },
+    {
+      "case_id": "same-kind-no-double-count",
+      "provider_llrs": [
+        {"evidence_kind": "EQUIPMENT", "llr": 1.0},
+        {"evidence_kind": "EQUIPMENT", "llr": 1.0},
+        {"evidence_kind": "VISUAL_CLASSIFIER", "llr": 1.0}
+      ],
+      "expected_fused_log_odds": 2.0,
+      "expected_snowboard_probability": 0.8807970779778823,
+      "expected_agreement_state": "AGREE_SNOWBOARD"
+    }
+  ]
+}

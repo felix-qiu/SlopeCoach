@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 from slopecoach_ml.biomechanics import (
     BIOMECHANICS_FEATURE_SCHEMA_VERSION,
@@ -23,11 +24,17 @@ from slopecoach_ml.sport_type import (
     summarize_provider_kind,
     visual_prompt_sha256,
 )
+from slopecoach_ml.sport_type.calibration import (
+    apply_calibrated_fusion,
+    summarize_observations,
+    unavailable_fusion,
+)
+from slopecoach_ml.sport_type.calibration.dataset import sha256_file
 
 from .biomechanics_features import benchmark_biomechanics_frames
 from .sport_type_collector import SportTypeBenchmarkCollector
 
-SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v3"
+SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v4"
 
 
 def benchmark_sport_type_frames(
@@ -48,6 +55,7 @@ def benchmark_sport_type_frames(
     user_selection: SportType | None = None,
     evidence_providers=None,
     config: SportTypeConfig | None = None,
+    calibration_artifact=None,
 ):
     started = time.perf_counter()
     sink = collector or SportTypeBenchmarkCollector()
@@ -139,6 +147,34 @@ def benchmark_sport_type_frames(
         if result.evidence_kind is SportEvidenceKind.VISUAL_CLASSIFIER
         for observation in result.observations
     )
+    calibration_summaries = []
+    source_path = Path(input_path)
+    video_sha256 = sha256_file(source_path) if source_path.is_file() else None
+    if video_sha256:
+        provenance_by_provider = {
+            item["provider_name"]: item
+            for provider in equipment_providers + visual_providers
+            if hasattr(provider, "provenance")
+            for item in (provider.provenance(),)
+        }
+        for provider_result in provider_results:
+            if not provider_result.evidence_kind.is_primary:
+                continue
+            calibration_summaries.append(
+                summarize_observations(
+                    provider_name=provider_result.provider_name,
+                    evidence_kind=provider_result.evidence_kind,
+                    source_video_id=source_path.stem,
+                    video_sha256=video_sha256,
+                    observations=[item.to_dict() for item in provider_result.observations],
+                    provenance=provenance_by_provider.get(provider_result.provider_name, {}),
+                ).to_dict()
+            )
+    calibrated_fusion = (
+        apply_calibrated_fusion(calibration_summaries, calibration_artifact)
+        if calibration_artifact is not None and calibration_summaries
+        else unavailable_fusion()
+    )
     upstream_perf = upstream["performance"]
     report = {
         "benchmark_contract_version": SPORT_TYPE_BENCHMARK_CONTRACT_VERSION,
@@ -167,6 +203,10 @@ def benchmark_sport_type_frames(
             "feature_registry_sha256": FEATURE_REGISTRY_SHA256,
         },
         "sport_type": sport_result.to_dict(),
+        "raw_auto_decision": auto.to_dict(),
+        "raw_provider_summaries": calibration_summaries,
+        "calibrated_fusion_result": calibrated_fusion,
+        "CALIBRATED_FUSION_CONTROLS_ROUTING": False,
         "diagnostic_auto_decisions": {
             "equipment_only_auto_decision": equipment_only.to_dict(),
             "visual_only_auto_decision": visual_only.to_dict(),
@@ -226,6 +266,9 @@ def benchmark_sport_type_frames(
                 )
                 else "PASS_WITH_LIMITATIONS"
             ),
+            "A6_3_ENGINEERING_VALIDATION": "PASS",
+            "A6_3_CALIBRATION_DATA_STATUS": "REQUIRES_INDEPENDENT_LABELED_DATASET",
+            "A6_3_CALIBRATED_FUSION_VALIDATION": calibrated_fusion["status"],
             "A6_2_AUTO_CLASSIFICATION_VALIDATION": (
                 "ENGINEERING_EVIDENCE_ONLY"
                 if auto.primary_evidence_kinds
@@ -234,8 +277,8 @@ def benchmark_sport_type_frames(
                 or visual_summary["executed_provider_count"]
                 else "NOT_VALIDATED_PROVIDER_UNAVAILABLE"
             ),
-            "A6_PRODUCT_VALIDATION": "BLOCKED_BY_SPORT_TYPE_GT",
-            "A7_ENGINEERING_READINESS": "READY_WITH_LIMITATIONS",
+            "A6_PRODUCT_VALIDATION": "BLOCKED_BY_SPORT_TYPE_GT_VALIDATION",
+            "A7_ENGINEERING_READINESS": "READY_WITH_USER_SPORT",
             "AUTO_SPORT_TYPE_PRODUCT_READINESS": (
                 "NOT_READY_GT_REQUIRED"
                 if auto.sport_type is not SportType.UNKNOWN

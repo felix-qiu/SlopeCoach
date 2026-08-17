@@ -62,7 +62,8 @@ def test_benchmark_reports_honest_provider_gt_and_gate(monkeypatch):
         detector_model={},
         pose_model={},
     )
-    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v3"
+    assert report["benchmark_contract_version"] == "ski-bench-sport-type-v4"
+    assert not report["CALIBRATED_FUSION_CONTROLS_ROUTING"]
     assert report["sport_type"]["effective_sport_type"] == "UNKNOWN"
     assert report["sport_type"]["resolution_status"] == "INSUFFICIENT_PRIMARY_EVIDENCE"
     assert report["sport_type"]["config"]["profile"] == "RESEARCH_DEFAULTS_A6"

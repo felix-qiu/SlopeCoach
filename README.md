@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A6.2: Cross-Primary Sport Evidence Research**. The code in
+SlopeCoach is currently in **Phase A6.3: SportType Evidence Calibration Research**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -37,6 +37,7 @@ python/slopecoach_ml/       Research/reference package
   temporal/                 Identity-safe interpolation and One Euro stabilization
   turns/                    Image-space proxy, extrema, crossings and provisional segments
   sport_type/               Auto-first sport contracts, fusion, providers, cues and routing gate
+    calibration/            Manual GT, source aggregation, Platt calibration and diagnostic LLR fusion
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -257,6 +258,51 @@ make benchmark-biomechanics \
   OUTPUT=artifacts/benchmarks/a5/example_5fps.json \
   DEBUG_DIR=artifacts/debug/a5_biomechanics/example_5fps
 ```
+
+## A6.3 SportType calibration research
+
+A6.3 does not change `ReferenceSportTypeFusion`, its weights, or its thresholds. RAW_V1 remains
+the effective AUTO routing path and `CALIBRATED_FUSION_CONTROLS_ROUTING = false`. The separate
+CALIBRATED_V1 path is a research diagnostic that converts each provider's source-level raw
+direction (`snowboard_support - ski_support`) through a provider-specific scalar Platt model,
+removes the training prior into estimated calibrated log-likelihood-ratio space, averages
+same-kind provider LLRs, and sums independent EQUIPMENT and VISUAL_CLASSIFIER kind LLRs.
+
+Frame observations and temporal subclips are correlated; each `source_video_id` contributes at
+most one sample per provider channel. Calibration labels are local manual annotations under
+`sport-type-gt-v1`. Only `USER_MANUAL` SKI/SNOWBOARD labels with `CONFIRMED` intended-target
+confirmation and matching video SHA are eligible. Generated templates are always `UNLABELED` and
+`UNCONFIRMED`; filenames, detector output, CLIP output, and AUTO decisions never prefill GT.
+
+```bash
+make prepare-sport-type-gt \
+  MANIFEST=artifacts/manifests/biomechanics_real.local.json \
+  OUTPUT_DIR=artifacts/annotations/sport_type
+
+make build-sport-calibration-dataset \
+  ARTIFACTS=artifacts/benchmarks/a6_2/ski_test_001_5fps.json \
+  ANNOTATIONS_DIR=artifacts/annotations/sport_type \
+  OUTPUT=artifacts/benchmarks/a6_3/calibration_dataset.json
+
+make fit-sport-evidence-calibration \
+  DATASET=artifacts/benchmarks/a6_3/calibration_dataset.json \
+  OUTPUT=artifacts/calibration/sport_evidence_a6_3.json
+
+make sport-calibration-golden
+```
+
+The research fit minimum is 10 confirmed independent SKI sources and 10 confirmed independent
+SNOWBOARD sources; 20 per class is preferred before fusion decisions. The current local corpus
+contains one source and no human SportType label, so its honest status is
+`INSUFFICIENT_LABELED_SPORT_TYPE_GT`: no real calibration coefficients or calibrated probability
+are produced. A future corpus should vary view, subject size, crowding, visibility, occlusion, and
+environment. This is an engineering evidence goal, not proof of generalization or product
+accuracy. Product threshold selection requires independent held-out GT.
+
+Calibration artifacts are model/checkpoint/provider specific; visual channels additionally bind
+the visual prompt SHA. Model, checkpoint, prompt, preprocessing, or raw-support semantic drift
+requires recalibration. Artifacts and calibrated fusion remain research-only. User SportType is
+authoritative; production SportType fusion remains deferred to Rust/mobile implementation.
 
 ## Real ski-video benchmark and artifacts
 
@@ -486,7 +532,7 @@ make sport-visual-doctor OPENML_PY=artifacts/openmmlab-venv/bin/python \
   VISUAL_CHECKPOINT=artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
 
-Run the v3 benchmark with both providers explicitly enabled:
+Run the v4 benchmark with both providers explicitly enabled:
 
 ```bash
 make benchmark-sport-type \
@@ -500,7 +546,7 @@ make benchmark-sport-type \
   DEBUG_DIR=artifacts/debug/a6_2_sport_type/ski_test_001_5fps
 ```
 
-`ski-bench-sport-type-v3` reports equipment-only, visual-only, and combined diagnostic auto
+`ski-bench-sport-type-v4` preserves the v3 equipment-only, visual-only, and combined diagnostic auto
 decisions from one model pass. Only the combined result plus an optional authoritative user
 override controls routing. Same-frame evidence IDs are deterministic and provider-qualified.
 Dataset-level LOCKED context counts are unique; per-provider selection and inference counts are
@@ -578,8 +624,8 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A6.2: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+Not implemented in Phase A6.3: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
 the production Rust Domain Kernel, ByteTrack/deep ReID, identity or turn GT labeling, diagnosis,
-scoring, drills, calibrated/production SportType models, SportType GT, 3D/physical edge angle,
+scoring, drills, validated production SportType models, labeled SportType GT, 3D/physical edge angle,
 LLM/VLM coaching, QNN, TensorRT, live camera coaching, complex UI, or first-party C++. Mobile
 integration and the Rust production implementation remain explicitly deferred.

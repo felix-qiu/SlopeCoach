@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden benchmark pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden benchmark pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -36,6 +36,24 @@ biomechanics-golden:
 
 sport-type-golden:
 	$(UV) run --project python python -m slopecoach_ml.cli sport-type-golden
+
+sport-calibration-golden:
+	$(UV) run --project python python -m slopecoach_ml.cli sport-calibration-golden
+
+prepare-sport-type-gt:
+	@test -n "$(MANIFEST)" || (echo 'MANIFEST is required' >&2; exit 2)
+	@test -n "$(OUTPUT_DIR)" || (echo 'OUTPUT_DIR is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli prepare-sport-type-gt --manifest "$(MANIFEST)" --output-dir "$(OUTPUT_DIR)"
+
+build-sport-calibration-dataset:
+	@test -n "$(ARTIFACTS)" || (echo 'ARTIFACTS is required' >&2; exit 2)
+	@test -n "$(OUTPUT)" || (echo 'OUTPUT is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli build-sport-calibration-dataset $(ARTIFACTS) $(if $(ANNOTATIONS_DIR),--annotations-dir "$(ANNOTATIONS_DIR)",) --output "$(OUTPUT)"
+
+fit-sport-evidence-calibration:
+	@test -n "$(DATASET)" || (echo 'DATASET is required' >&2; exit 2)
+	@test -n "$(OUTPUT)" || (echo 'OUTPUT is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli fit-sport-evidence-calibration "$(DATASET)" $(if $(ANNOTATIONS_DIR),--annotations-dir "$(ANNOTATIONS_DIR)",) --output "$(OUTPUT)"
 
 benchmark:
 	$(UV) run --project python python -m slopecoach_ml.cli benchmark $(FIXTURE)

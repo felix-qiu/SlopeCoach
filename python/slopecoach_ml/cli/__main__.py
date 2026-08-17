@@ -61,6 +61,13 @@ from slopecoach_ml.sport_type import (
     sha256_file,
     visual_provider_doctor,
 )
+from slopecoach_ml.sport_type.calibration import (
+    apply_calibrated_fusion,
+    build_calibration_dataset,
+    fit_calibration_artifact,
+    prepare_sport_type_gt,
+    run_calibration_golden,
+)
 from slopecoach_ml.temporal import run_temporal_golden, run_turn_golden
 from slopecoach_ml.video import OpenCVVideoSampler, inspect_video
 
@@ -174,6 +181,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--fixture", default=str(_root() / "fixtures/golden_sport_type_001.json")
     )
     sport_type_golden.add_argument("--output")
+    calibration_golden = subparsers.add_parser(
+        "sport-calibration-golden", help="run deterministic A6.3 calibrated fusion Golden"
+    )
+    calibration_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_sport_calibration_001.json")
+    )
+    calibration_golden.add_argument("--output")
+    prepare_sport_gt = subparsers.add_parser(
+        "prepare-sport-type-gt", help="create UNLABELED manual SportType GT templates"
+    )
+    prepare_sport_gt.add_argument("--manifest", required=True)
+    prepare_sport_gt.add_argument("--output-dir", required=True)
+    build_calibration = subparsers.add_parser(
+        "build-sport-calibration-dataset", help="extract source-level samples from A6 artifacts"
+    )
+    build_calibration.add_argument("artifacts", nargs="+")
+    build_calibration.add_argument("--annotations-dir")
+    build_calibration.add_argument("--output", required=True)
+    fit_calibration = subparsers.add_parser(
+        "fit-sport-evidence-calibration", help="fit research-only provider calibrators"
+    )
+    fit_calibration.add_argument("dataset")
+    fit_calibration.add_argument("--annotations-dir")
+    fit_calibration.add_argument("--output", required=True)
+    apply_calibration = subparsers.add_parser(
+        "apply-sport-evidence-calibration", help="apply calibration to an existing A6 artifact"
+    )
+    apply_calibration.add_argument("artifact")
+    apply_calibration.add_argument("--calibration", required=True)
+    apply_calibration.add_argument("--output")
     temporal_turns = subparsers.add_parser(
         "benchmark-temporal-turns", help="run A4 temporal pose and turn benchmark"
     )
@@ -204,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     sport_type.add_argument("--visual-provider", choices=("none", "openai-clip"), default="none")
     sport_type.add_argument("--visual-checkpoint")
     sport_type.add_argument("--visual-model-name", choices=("ViT-B/32",), default="ViT-B/32")
+    sport_type.add_argument("--calibration-artifact")
     sport_type.add_argument("--output")
     sport_type.add_argument("--debug-dir")
     sport_type.add_argument("--max-debug-frames", type=int, default=12)
@@ -270,6 +308,35 @@ def _real_providers():
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "prepare-sport-type-gt":
+        _write_json(prepare_sport_type_gt(args.manifest, args.output_dir), None)
+        return 0
+    if args.command == "build-sport-calibration-dataset":
+        result = build_calibration_dataset(args.artifacts, args.annotations_dir)
+        _write_json(result, args.output)
+        return 0
+    if args.command == "fit-sport-evidence-calibration":
+        dataset = json.loads(Path(args.dataset).read_text(encoding="utf-8"))
+        if args.annotations_dir:
+            source_artifacts = [item["source_artifact"] for item in dataset.get("clips", [])]
+            dataset = build_calibration_dataset(source_artifacts, args.annotations_dir)
+        result = fit_calibration_artifact(dataset)
+        _write_json(result, args.output)
+        return 0 if result["status"] == "RESEARCH_CALIBRATION_AVAILABLE" else 3
+    if args.command == "apply-sport-evidence-calibration":
+        dataset = build_calibration_dataset([args.artifact])
+        calibration = json.loads(Path(args.calibration).read_text(encoding="utf-8"))
+        result = {
+            "raw_auto_decision": dataset["raw_auto_decisions"][0],
+            "raw_provider_summaries": dataset["source_samples"],
+            "calibration_artifact_sha256": calibration.get("calibration_artifact_sha256"),
+            "calibrated_fusion_result": apply_calibrated_fusion(
+                dataset["source_samples"], calibration
+            ),
+            "CALIBRATED_FUSION_CONTROLS_ROUTING": False,
+        }
+        _write_json(result, args.output)
+        return 0
     if args.command == "prepare-biomechanics-dataset":
         result = prepare_real_dataset_manifest(args.video_dir, args.output)
         _write_json(result, None)
@@ -365,6 +432,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "sport-type-golden":
         result = run_sport_type_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "sport-calibration-golden":
+        result = run_calibration_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
@@ -639,6 +710,11 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     if args.visual_provider == "openai-clip"
                     else NotConfiguredVisualSportEvidenceProvider(),
+                )
+                runner_kwargs["calibration_artifact"] = (
+                    json.loads(Path(args.calibration_artifact).read_text(encoding="utf-8"))
+                    if args.calibration_artifact
+                    else None
                 )
             report = benchmark_runner(**runner_kwargs)
             report["debug_artifacts"] = (
