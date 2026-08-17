@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from slopecoach_ml.diagnosis import validate_diagnosis_truth_consistency
 from slopecoach_ml.scoring import (
     DIAGNOSIS_DIMENSION_REGISTRY,
     IssuePriorityPolicy,
@@ -14,6 +15,7 @@ def build_issue_summaries(diagnosis_result) -> tuple[ProvisionalIssueSummary, ..
     payload = (
         diagnosis_result.to_dict() if hasattr(diagnosis_result, "to_dict") else diagnosis_result
     )
+    validate_diagnosis_truth_consistency(payload)
     diagnosed_codes = {
         item.get("diagnosis_code")
         for item in payload.get("diagnoses", ())
@@ -35,7 +37,7 @@ def build_issue_summaries(diagnosis_result) -> tuple[ProvisionalIssueSummary, ..
             continue
         turns = tuple(dict.fromkeys(str(item.get("turn_id")) for item in triggered))
         frames = tuple(
-            dict.fromkeys(frame for item in triggered for frame in item.get("evidence_frames", ()))
+            sorted(set(frame for item in triggered for frame in item.get("evidence_frames", ())))
         )
         features = tuple(
             dict.fromkeys(

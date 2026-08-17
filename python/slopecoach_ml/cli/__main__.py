@@ -49,7 +49,7 @@ from slopecoach_ml.reference import (
     analyze_pose_frame,
     load_golden_fixture,
 )
-from slopecoach_ml.scoring import run_scorecard_golden
+from slopecoach_ml.scoring import run_a8_provenance_golden, run_scorecard_golden
 from slopecoach_ml.sport_type import (
     ClipVisualSportEvidenceProvider,
     FailedSportEvidenceProvider,
@@ -220,6 +220,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     coach_golden.add_argument("--fixture", default=str(_root() / "fixtures/golden_coach_001.json"))
     coach_golden.add_argument("--output")
+    provenance_golden = subparsers.add_parser(
+        "a8-provenance-golden", help="run deterministic A8.1 provenance Golden"
+    )
+    provenance_golden.add_argument(
+        "--fixture",
+        default=str(_root() / "fixtures/golden_a8_1_provenance_001.json"),
+    )
+    provenance_golden.add_argument("--output")
     scoring_coach = subparsers.add_parser(
         "benchmark-scoring-coach", help="run artifact-only A8 scorecard/coach benchmark"
     )
@@ -494,6 +502,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "coach-golden":
         result = run_coach_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "a8-provenance-golden":
+        result = run_a8_provenance_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":

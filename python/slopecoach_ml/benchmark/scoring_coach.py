@@ -16,30 +16,37 @@ from slopecoach_ml.coach import (
 )
 from slopecoach_ml.scoring import (
     DIAGNOSIS_DIMENSION_REGISTRY_SHA256,
+    IssuePriorityPolicy,
     build_scorecard,
+    issue_priority_policy_sha256,
 )
+
+from .diagnosis_compatibility import validate_diagnosis_artifact_compatibility
 
 SCORING_COACH_BENCHMARK_VERSION = "ski-bench-scoring-coach-v1"
 
 
-def benchmark_scoring_coach_artifact(path: str | Path) -> dict[str, object]:
+def benchmark_scoring_coach_artifact(
+    path: str | Path, *, issue_policy: IssuePriorityPolicy | None = None
+) -> dict[str, object]:
     started_total = time.perf_counter()
     artifact = json.loads(Path(path).read_text(encoding="utf-8"))
-    if artifact.get("benchmark_contract_version") != "ski-bench-diagnosis-v1":
-        raise ValueError("ARTIFACT_MISSING_DIAGNOSIS_RESULT")
-    diagnosis = artifact.get("diagnosis_result")
-    if not isinstance(diagnosis, dict) or diagnosis.get("contract_version") != "diagnosis-v1":
-        raise ValueError("ARTIFACT_MISSING_DIAGNOSIS_RESULT")
+    diagnosis, provenance, compatibility = validate_diagnosis_artifact_compatibility(artifact)
+    settings = issue_policy or IssuePriorityPolicy()
 
     started = time.perf_counter()
-    scorecard = build_scorecard(diagnosis).to_dict()
+    scorecard = build_scorecard(diagnosis, diagnosis_semantics_provenance=provenance).to_dict()
     scorecard_seconds = time.perf_counter() - started
     started = time.perf_counter()
     all_issues = build_issue_summaries(diagnosis)
-    top_issues = prioritize_issues(all_issues)
+    top_issues = prioritize_issues(all_issues, settings)
     issue_seconds = time.perf_counter() - started
     started = time.perf_counter()
-    context = build_coach_context(diagnosis)
+    context = build_coach_context(
+        diagnosis,
+        issue_policy=settings,
+        diagnosis_semantics_provenance=provenance,
+    )
     context_seconds = time.perf_counter() - started
     started = time.perf_counter()
     coach = build_coach_report(context).to_dict()
@@ -48,15 +55,21 @@ def benchmark_scoring_coach_artifact(path: str | Path) -> dict[str, object]:
     report = {
         "benchmark_contract_version": SCORING_COACH_BENCHMARK_VERSION,
         "input_kind": "EXISTING_DIAGNOSIS_ARTIFACT",
+        "input_compatibility": compatibility,
+        "diagnosis_semantics_provenance": provenance,
+        "DIAGNOSIS_PROVENANCE_ORIGIN": compatibility["diagnosis_provenance_origin"],
         "input_diagnosis_contract_version": diagnosis["contract_version"],
+        "upstream_diagnosis_status": diagnosis.get("status"),
         "scorecard_contract_version": scorecard["contract_version"],
         "scoring_policy_version": scorecard["scoring_policy_version"],
-        "issue_priority_policy_version": "issue-priority-v1",
+        "issue_priority_policy": settings.to_dict(),
+        "issue_priority_policy_sha256": issue_priority_policy_sha256(settings),
         "coach_context_version": "coach-context-v1",
         "coach_report_version": coach["contract_version"],
         "coach_template_version": coach["template_version"],
         "drill_library_version": coach["drill_library_version"],
         "scorecard": scorecard,
+        "qualified_turn_count": artifact.get("qualified_turn_count"),
         "dimension_assessment_summary": {
             item["dimension"]: item["status"] for item in scorecard["dimensions"]
         },
@@ -68,8 +81,12 @@ def benchmark_scoring_coach_artifact(path: str | Path) -> dict[str, object]:
         "drill_ids": [item["drill"]["drill_id"] for item in coach["practice_plan"]],
         "template_ids": [item["template_id"] for item in coach["practice_plan"]],
         "coach_report": coach,
+        "coach_context": context.to_dict(),
         "fingerprints": {
             "diagnosis_rule_registry_sha256": scorecard["diagnosis_rule_registry_sha256"],
+            "diagnosis_config_sha256": scorecard["diagnosis_config_sha256"],
+            "diagnosis_semantics_sha256": scorecard["diagnosis_semantics_sha256"],
+            "issue_priority_policy_sha256": issue_priority_policy_sha256(settings),
             "diagnosis_dimension_registry_sha256": DIAGNOSIS_DIMENSION_REGISTRY_SHA256,
             "drill_library_sha256": DRILL_LIBRARY_SHA256,
             "coach_template_registry_sha256": COACH_TEMPLATE_REGISTRY_SHA256,

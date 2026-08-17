@@ -1,0 +1,47 @@
+{
+  "contract_version": "golden-a8-1-provenance-v1",
+  "diagnosis_semantics_cases": [
+    {
+      "case_id": "current-default-diagnosis-semantics",
+      "diagnosis_config": {
+        "minimum_turn_feature_samples": 5,
+        "minimum_turn_feature_coverage": 0.6,
+        "limited_knee_flexion_range_deg": 12.0,
+        "knee_asymmetry_median_deg": 10.0,
+        "knee_flexion_phase_offset_abs": 0.2,
+        "profile": "RESEARCH_DEFAULTS_A7"
+      }
+    },
+    {
+      "case_id": "custom-diagnosis-semantics",
+      "diagnosis_config": {
+        "minimum_turn_feature_samples": 5,
+        "minimum_turn_feature_coverage": 0.6,
+        "limited_knee_flexion_range_deg": 11.5,
+        "knee_asymmetry_median_deg": 10.0,
+        "knee_flexion_phase_offset_abs": 0.2,
+        "profile": "RESEARCH_DEFAULTS_A7"
+      }
+    }
+  ],
+  "policy_cases": [
+    {
+      "case_id": "default-top-two-policy",
+      "policy": {"max_top_issues": 2},
+      "expected_policy": {
+        "version": "issue-priority-v1",
+        "profile": "EVIDENCE_RECURRENCE_PRIORITY_A8",
+        "max_top_issues": 2
+      }
+    },
+    {
+      "case_id": "custom-top-one-policy",
+      "policy": {"max_top_issues": 1},
+      "expected_policy": {
+        "version": "issue-priority-v1",
+        "profile": "EVIDENCE_RECURRENCE_PRIORITY_A8",
+        "max_top_issues": 1
+      }
+    }
+  ]
+}

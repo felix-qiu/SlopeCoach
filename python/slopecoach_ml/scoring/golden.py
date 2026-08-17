@@ -6,6 +6,11 @@ import json
 import math
 from pathlib import Path
 
+from slopecoach_ml.diagnosis import (
+    DiagnosisRuleConfig,
+    build_diagnosis_semantics_provenance,
+)
+
 from .registry import DIAGNOSIS_DIMENSION_REGISTRY_SHA256
 from .scorecard import build_scorecard
 
@@ -56,6 +61,8 @@ def diagnosis_from_golden_case(case: dict[str, object]) -> dict[str, object]:
         if source == "USER"
         else "AUTO_SPORT_TYPE_NOT_PRODUCT_VALIDATED"
     )
+    config = DiagnosisRuleConfig().to_dict()
+    provenance = build_diagnosis_semantics_provenance(config).to_dict()
     return {
         "contract_version": "diagnosis-v1",
         "status": case.get(
@@ -69,6 +76,8 @@ def diagnosis_from_golden_case(case: dict[str, object]) -> dict[str, object]:
         "rule_evaluations": evaluations,
         "diagnoses": diagnoses,
         "blockers": [],
+        "config": config,
+        "diagnosis_semantics_provenance": provenance,
         "limitations": ["IMAGE_SPACE_2D_ONLY", limitation],
     }
 

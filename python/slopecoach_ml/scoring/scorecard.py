@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from slopecoach_ml.diagnosis import DIAGNOSIS_RULE_REGISTRY_SHA256
+from slopecoach_ml.diagnosis import (
+    DiagnosisResult,
+    build_diagnosis_semantics_provenance,
+    validate_diagnosis_semantics_provenance,
+    validate_diagnosis_truth_consistency,
+)
 
 from .contracts import (
     DimensionAssessment,
@@ -24,9 +29,22 @@ SCORECARD_LIMITATIONS = (
 )
 
 
-def build_scorecard(diagnosis_result, policy: ScoringPolicy | None = None) -> ScoreCard:
+def build_scorecard(
+    diagnosis_result,
+    policy: ScoringPolicy | None = None,
+    *,
+    diagnosis_semantics_provenance=None,
+    trusted_current_process: bool = False,
+) -> ScoreCard:
     settings = policy or ScoringPolicy()
     payload = _payload(diagnosis_result)
+    provenance = _resolve_provenance(
+        diagnosis_result,
+        payload,
+        diagnosis_semantics_provenance,
+        trusted_current_process=trusted_current_process,
+    )
+    validate_diagnosis_truth_consistency(payload)
     evaluations = tuple(payload.get("rule_evaluations", ()))
     assessments = []
     for dimension in ScoreDimension:
@@ -83,9 +101,13 @@ def build_scorecard(diagnosis_result, policy: ScoringPolicy | None = None) -> Sc
         )
     return ScoreCard(
         dimensions=tuple(assessments),
-        diagnosis_contract_version=str(payload.get("contract_version", "diagnosis-v1")),
-        diagnosis_rule_registry_sha256=DIAGNOSIS_RULE_REGISTRY_SHA256,
+        diagnosis_contract_version=provenance.diagnosis_contract_version,
+        diagnosis_rule_registry_sha256=provenance.diagnosis_rule_registry_sha256,
         diagnosis_dimension_registry_sha256=DIAGNOSIS_DIMENSION_REGISTRY_SHA256,
+        diagnosis_config_sha256=provenance.diagnosis_config_sha256,
+        diagnosis_semantics_sha256=provenance.diagnosis_semantics_sha256,
+        diagnosis_semantics_provenance_version=provenance.version,
+        diagnosis_semantics_provenance=provenance.to_dict(),
         scoring_policy_version=settings.version,
         limitations=SCORECARD_LIMITATIONS,
     )
@@ -93,6 +115,24 @@ def build_scorecard(diagnosis_result, policy: ScoringPolicy | None = None) -> Sc
 
 def _payload(result) -> dict[str, object]:
     return result.to_dict() if hasattr(result, "to_dict") else result
+
+
+def _resolve_provenance(result, payload, explicit, *, trusted_current_process):
+    if isinstance(result, DiagnosisResult):
+        return build_diagnosis_semantics_provenance(
+            result.config,
+            diagnosis_contract_version=result.contract_version,
+        )
+    source = explicit or payload.get("diagnosis_semantics_provenance")
+    if source is None and trusted_current_process:
+        source = build_diagnosis_semantics_provenance(
+            payload.get("config"),
+            diagnosis_contract_version=str(payload.get("contract_version", "")),
+        ).to_dict()
+    provenance = validate_diagnosis_semantics_provenance(source)
+    if provenance.diagnosis_contract_version != payload.get("contract_version"):
+        raise ValueError("DIAGNOSIS_CONTRACT_INCOMPATIBLE")
+    return provenance
 
 
 def _validate_evaluations(items) -> None:

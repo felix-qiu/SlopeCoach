@@ -7,7 +7,12 @@ from slopecoach_ml.scoring import IssuePriorityPolicy, build_scorecard
 from .contracts import CoachContext, CoachContextStatus, CoachReport
 from .drills import DRILL_LIBRARY_SHA256, drill_for_diagnosis
 from .issues import build_issue_summaries, prioritize_issues
-from .templates import COACH_TEMPLATE_REGISTRY_SHA256, render_issue_template
+from .templates import (
+    COACH_TEMPLATE_REGISTRY_SHA256,
+    LANGUAGE_POLICY,
+    render_headline,
+    render_issue_template,
+)
 
 _NOT_ANALYZABLE = {
     "NOT_ANALYZABLE_SPORT_TYPE_UNKNOWN",
@@ -17,12 +22,21 @@ _NOT_ANALYZABLE = {
 
 
 def build_coach_context(
-    diagnosis_result, *, issue_policy: IssuePriorityPolicy | None = None
+    diagnosis_result,
+    *,
+    issue_policy: IssuePriorityPolicy | None = None,
+    diagnosis_semantics_provenance=None,
+    trusted_current_process: bool = False,
 ) -> CoachContext:
+    settings = issue_policy or IssuePriorityPolicy()
     payload = (
         diagnosis_result.to_dict() if hasattr(diagnosis_result, "to_dict") else diagnosis_result
     )
-    scorecard = build_scorecard(payload).to_dict()
+    scorecard = build_scorecard(
+        diagnosis_result,
+        diagnosis_semantics_provenance=diagnosis_semantics_provenance,
+        trusted_current_process=trusted_current_process,
+    ).to_dict()
     upstream = str(payload.get("status"))
     if upstream in _NOT_ANALYZABLE:
         status = CoachContextStatus.NOT_ANALYZABLE_UPSTREAM
@@ -30,7 +44,7 @@ def build_coach_context(
         top_issues = ()
     else:
         all_issues = build_issue_summaries(payload)
-        top_issues = prioritize_issues(all_issues, issue_policy)
+        top_issues = prioritize_issues(all_issues, settings)
         status = (
             CoachContextStatus.EXECUTED_WITH_PROVISIONAL_ISSUES
             if top_issues
@@ -67,28 +81,37 @@ def build_coach_context(
         },
         evidence_references=evidence,
         limitations=limitations,
+        issue_priority_policy=settings,
     )
 
 
 def build_coach_report(
-    diagnosis_result, *, issue_policy: IssuePriorityPolicy | None = None
+    diagnosis_result,
+    *,
+    issue_policy: IssuePriorityPolicy | None = None,
+    diagnosis_semantics_provenance=None,
+    trusted_current_process: bool = False,
 ) -> CoachReport:
     context = (
         diagnosis_result
         if isinstance(diagnosis_result, CoachContext)
-        else build_coach_context(diagnosis_result, issue_policy=issue_policy)
+        else build_coach_context(
+            diagnosis_result,
+            issue_policy=issue_policy,
+            diagnosis_semantics_provenance=diagnosis_semantics_provenance,
+            trusted_current_process=trusted_current_process,
+        )
+    )
+    headline = render_headline(
+        status=context.status.value,
+        issue_count=len(context.top_issues),
+        upstream_status=context.upstream_diagnosis_status,
     )
     if context.status is CoachContextStatus.NOT_ANALYZABLE_UPSTREAM:
-        if context.upstream_diagnosis_status == "NOT_ANALYZABLE_NO_QUALIFIED_TURNS":
-            headline = "当前没有足够的完整转弯证据生成动作建议"
-        else:
-            headline = "当前证据不足，暂时无法生成动作建议"
         practice_plan = ()
     elif context.top_issues:
-        headline = f"这段视频有 {len(context.top_issues)} 个可以优先关注的动作信号"
         practice_plan = _practice_plan(context)
     else:
-        headline = "当前已实现且可评估的研究规则没有触发；这不代表完整技术表现已被验证。"
         practice_plan = ()
     return CoachReport(
         status=context.status,
@@ -101,10 +124,11 @@ def build_coach_report(
             "turn_counts": context.turn_counts,
             "evidence_references": list(context.evidence_references),
         },
-        warnings=("COACHING_IS_PROVISIONAL_RESEARCH_PRACTICE_GUIDANCE",),
+        warnings=LANGUAGE_POLICY.controlled_warnings,
         limitations=context.limitations,
         template_registry_sha256=COACH_TEMPLATE_REGISTRY_SHA256,
         drill_library_sha256=DRILL_LIBRARY_SHA256,
+        issue_priority_policy=context.issue_priority_policy,
     )
 
 

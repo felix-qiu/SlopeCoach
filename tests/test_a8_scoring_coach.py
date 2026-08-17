@@ -10,6 +10,7 @@ import pytest
 
 from slopecoach_ml.benchmark import benchmark_scoring_coach_artifact
 from slopecoach_ml.benchmark.diagnosis import benchmark_diagnosis_artifact
+from slopecoach_ml.diagnosis import DIAGNOSIS_RULE_REGISTRY_SHA256
 from slopecoach_ml.coach import (
     COACH_TEMPLATE_REGISTRY_SHA256,
     DRILL_LIBRARY,
@@ -137,9 +138,8 @@ def test_diagnosis_is_read_only_and_coach_cannot_invent_issue():
     assert diagnosis == original
     diagnosis["diagnoses"] = []
     diagnosis["tempting_raw_feature"] = "knee range below threshold"
-    report = build_coach_report(diagnosis).to_dict()
-    assert report["top_issues"] == []
-    assert report["practice_plan"] == []
+    with pytest.raises(ValueError, match="DIAGNOSIS_TRUTH_CONTRACT_INCONSISTENT"):
+        build_coach_report(diagnosis)
 
 
 def test_upstream_not_analyzable_and_limitations_are_preserved():
@@ -204,6 +204,11 @@ def test_artifact_only_benchmark_and_missing_contract(tmp_path):
         json.dumps(
             {
                 "benchmark_contract_version": "ski-bench-diagnosis-v1",
+                "diagnosis_rule_registry_sha256": DIAGNOSIS_RULE_REGISTRY_SHA256,
+                "diagnosis_config": diagnosis["config"],
+                "diagnosis_semantics_provenance": diagnosis[
+                    "diagnosis_semantics_provenance"
+                ],
                 "diagnosis_result": diagnosis,
             }
         ),
@@ -217,7 +222,7 @@ def test_artifact_only_benchmark_and_missing_contract(tmp_path):
     json.dumps(report, allow_nan=False)
     invalid = tmp_path / "invalid.json"
     invalid.write_text("{}", encoding="utf-8")
-    with pytest.raises(ValueError, match="ARTIFACT_MISSING_DIAGNOSIS_RESULT"):
+    with pytest.raises(ValueError, match="DIAGNOSIS_BENCHMARK_CONTRACT_INCOMPATIBLE"):
         benchmark_scoring_coach_artifact(invalid)
 
 
@@ -275,3 +280,10 @@ def test_a7_rejected_turn_counts_and_blocker_occurrences(tmp_path):
     assert timing["phase"] == "APEX_RELATIVE_TIMING"
     assert report["diagnosis_result"]["DIAGNOSIS_SEVERITY_STATUS"] == "NOT_CALIBRATED"
     assert report["diagnosis_result"]["SEVERITY_STATUS"] == "NOT_CALIBRATED"
+    provenance = report["diagnosis_semantics_provenance"]
+    assert provenance["diagnosis_config"] == report["diagnosis_config"]
+    assert provenance["diagnosis_config"] == report["diagnosis_result"]["config"]
+    assert (
+        provenance["diagnosis_rule_registry_sha256"]
+        == report["diagnosis_rule_registry_sha256"]
+    )

@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A8: Scorecard and Controlled Coaching Research Foundation**. The code in
+SlopeCoach is currently in **Phase A8.1: Downstream Contract and Provenance Hardening**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -388,6 +388,42 @@ Ground-truth score metrics remain null. A future LLM may only rephrase, translat
 controlled CoachContext; it may not create diagnosis, change scores or priority facts, or invent
 evidence. Mobile integration and the production Rust implementation remain deferred.
 
+## A8.1 downstream provenance and contract invariants
+
+A8.1 adds no coaching capability. It binds every downstream ScoreCard and Coach artifact to the
+exact Diagnosis semantics that produced it. A Diagnosis registry SHA alone is insufficient because
+research runs may use an explicit custom `DiagnosisRuleConfig`. The additive
+`diagnosis-semantics-provenance-v1` block therefore records the Diagnosis contract and registry SHA,
+the complete config, a config SHA, and a combined semantic SHA. Persisted artifact ingestion fails
+closed on missing provenance, an unsupported registry, inconsistent configs, invalid fingerprints,
+or contradictory Diagnosis entries and rule evaluations.
+
+New A7 artifacts carry explicit semantic provenance. Existing `ski-bench-diagnosis-v1` artifacts
+may be accepted as `LEGACY_EXPLICIT_FIELDS_DERIVED` only when their top-level registry/config and
+`diagnosis_result.config` are all present and consistent; current Python defaults are never used to
+silently relabel old artifacts. In-memory typed `DiagnosisResult` values bind their actual config
+to the current process registry.
+
+The complete `IssuePriorityPolicy`—including `max_top_issues`—and its deterministic SHA now survive
+ScoreCard-to-Coach reporting. All deterministic zh-CN headlines, evidence formatting, issue copy,
+and controlled warning semantics live in one language policy. Expanding this semantic coverage
+intentionally changes `coach_template_registry_sha256` from
+`4b7af86d4364b516cca265e6ff23b3f0f2704b80393f531157ba518a1fd7d549` to
+`b7ffb27da4f2179f45cf83bf08175593e4233362ebdef6f3202808d2138aa202`; runtime counts and timing are
+excluded from that fingerprint.
+
+Contract constructors now reject numeric score or scale leakage, invalid dimension arithmetic,
+invalid recurrence ratios, fabricated issue severity/confidence, incompatible practice plans, and
+unsafe drill metadata. Numeric dimension and overall scores remain intentionally null because
+Diagnosis, Turn, and Score ground truth are unavailable.
+
+```bash
+make a8-provenance-golden
+make benchmark-scoring-coach \
+  ARTIFACT=artifacts/benchmarks/a7/ski_test_001_artifact_only.json \
+  OUTPUT=artifacts/benchmarks/a8_1/ski_test_001_artifact_only.json
+```
+
 ## Real ski-video benchmark and artifacts
 
 `make benchmark` runs the deterministic Golden benchmark. The explicit local A2.2 path samples
@@ -708,7 +744,7 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A8: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+Not implemented in Phase A8.1: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
 the production Rust Domain Kernel, validated numeric scores or overall score, severity/confidence
 calibration, skill classification, diagnosis/turn/score GT, validated production SportType models,
 3D or physical edge-angle/COM/pressure measurement, LLM/VLM coaching, XGBoost, QNN, TensorRT,

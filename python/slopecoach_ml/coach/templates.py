@@ -55,12 +55,47 @@ TEMPLATE_REGISTRY = (
 )
 
 
-def canonical_template_registry_json(registry=TEMPLATE_REGISTRY) -> str:
-    payload = {
-        "template_version": COACH_TEMPLATE_VERSION,
-        "templates": [item.to_dict() for item in registry],
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+@dataclass(frozen=True)
+class CoachLanguagePolicy:
+    issue_templates: tuple[CoachTemplate, ...]
+    issues_headline_template: str
+    no_qualified_turns_headline: str
+    not_analyzable_headline: str
+    no_trigger_headline: str
+    evidence_template: str
+    controlled_warnings: tuple[str, ...]
+    language: str = "zh-CN"
+    template_version: str = COACH_TEMPLATE_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "template_version": self.template_version,
+            "language": self.language,
+            "issue_templates": [item.to_dict() for item in self.issue_templates],
+            "headline_templates": {
+                "ISSUES_HEADLINE_TEMPLATE": self.issues_headline_template,
+                "NO_QUALIFIED_TURNS_HEADLINE": self.no_qualified_turns_headline,
+                "NOT_ANALYZABLE_HEADLINE": self.not_analyzable_headline,
+                "NO_TRIGGER_HEADLINE": self.no_trigger_headline,
+            },
+            "evidence_templates": {"ISSUE_EVIDENCE_TEMPLATE": self.evidence_template},
+            "controlled_warnings": list(self.controlled_warnings),
+        }
+
+
+LANGUAGE_POLICY = CoachLanguagePolicy(
+    issue_templates=TEMPLATE_REGISTRY,
+    issues_headline_template="这段视频有 {count} 个可以优先关注的动作信号",
+    no_qualified_turns_headline="当前没有足够的完整转弯证据生成动作建议",
+    not_analyzable_headline="当前证据不足，暂时无法生成动作建议",
+    no_trigger_headline=("当前已实现且可评估的研究规则没有触发；这不代表完整技术表现已被验证。"),
+    evidence_template="触发 {triggered_turn_count} / {evaluable_turn_count} 个可评估转弯。",
+    controlled_warnings=("COACHING_IS_PROVISIONAL_RESEARCH_PRACTICE_GUIDANCE",),
+)
+
+
+def canonical_template_registry_json(policy: CoachLanguagePolicy = LANGUAGE_POLICY) -> str:
+    return json.dumps(policy.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 COACH_TEMPLATE_REGISTRY_SHA256 = hashlib.sha256(
@@ -68,16 +103,29 @@ COACH_TEMPLATE_REGISTRY_SHA256 = hashlib.sha256(
 ).hexdigest()
 
 
-def render_issue_template(issue: ProvisionalIssueSummary) -> dict[str, object]:
+def render_issue_template(
+    issue: ProvisionalIssueSummary, policy: CoachLanguagePolicy = LANGUAGE_POLICY
+) -> dict[str, object]:
     template = next(
-        item for item in TEMPLATE_REGISTRY if item.diagnosis_code == issue.diagnosis_code
+        item for item in policy.issue_templates if item.diagnosis_code == issue.diagnosis_code
     )
     return {
         "template_id": template.template_id,
         "title": template.title,
         "explanation": template.explanation,
-        "evidence": (
-            f"触发 {issue.triggered_turn_count} / {issue.evaluable_turn_count} 个可评估转弯。"
+        "evidence": policy.evidence_template.format(
+            triggered_turn_count=issue.triggered_turn_count,
+            evaluable_turn_count=issue.evaluable_turn_count,
         ),
         "limitation": template.limitation,
     }
+
+
+def render_headline(*, status: str, issue_count: int, upstream_status: str) -> str:
+    if status == "NOT_ANALYZABLE_UPSTREAM":
+        if upstream_status == "NOT_ANALYZABLE_NO_QUALIFIED_TURNS":
+            return LANGUAGE_POLICY.no_qualified_turns_headline
+        return LANGUAGE_POLICY.not_analyzable_headline
+    if issue_count:
+        return LANGUAGE_POLICY.issues_headline_template.format(count=issue_count)
+    return LANGUAGE_POLICY.no_trigger_headline

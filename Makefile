@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden diagnosis-golden scorecard-golden coach-golden benchmark benchmark-diagnosis benchmark-scoring-coach pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden diagnosis-golden scorecard-golden coach-golden a8-provenance-golden benchmark benchmark-diagnosis benchmark-scoring-coach pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -48,6 +48,9 @@ scorecard-golden:
 
 coach-golden:
 	$(UV) run --project python python -m slopecoach_ml.cli coach-golden
+
+a8-provenance-golden:
+	$(UV) run --project python python -m slopecoach_ml.cli a8-provenance-golden
 
 benchmark-diagnosis:
 	@test -n "$(ARTIFACT)" || (echo 'ARTIFACT is required' >&2; exit 2)

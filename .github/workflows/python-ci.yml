@@ -50,3 +50,5 @@ jobs:
         run: uv run --project python python -m slopecoach_ml.cli scorecard-golden
       - name: Controlled coach Golden
         run: uv run --project python python -m slopecoach_ml.cli coach-golden
+      - name: Downstream provenance Golden
+        run: uv run --project python python -m slopecoach_ml.cli a8-provenance-golden

@@ -9,7 +9,7 @@ from slopecoach_ml.diagnosis import (
     DIAGNOSIS_BENCHMARK_CONTRACT_VERSION,
     DIAGNOSIS_RULE_REGISTRY_SHA256,
     RULE_REGISTRY,
-    DiagnosisRuleConfig,
+    build_diagnosis_semantics_provenance,
     diagnose_biomechanics,
 )
 
@@ -34,6 +34,7 @@ def benchmark_diagnosis_artifact(
         biomechanics_result=artifact["biomechanics_result"],
         turn_segments=artifact["turn_segments"],
     ).to_dict()
+    provenance = build_diagnosis_semantics_provenance(result["config"])
     evaluations = result["rule_evaluations"]
     per_rule = []
     for definition in RULE_REGISTRY:
@@ -89,7 +90,8 @@ def benchmark_diagnosis_artifact(
         "total_provisional_diagnoses": len(result["diagnoses"]),
         "blocker_counts": _blocker_counts(evaluations),
         "diagnosis_rule_registry_sha256": DIAGNOSIS_RULE_REGISTRY_SHA256,
-        "diagnosis_config": DiagnosisRuleConfig().to_dict(),
+        "diagnosis_config": result["config"],
+        "diagnosis_semantics_provenance": provenance.to_dict(),
         "diagnosis_result": result,
         "ground_truth": {
             "DIAGNOSIS_GT_STATUS": "NOT_AVAILABLE",
