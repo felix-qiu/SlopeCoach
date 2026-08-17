@@ -250,12 +250,57 @@ def validate_scorecard_payload(scorecard: dict[str, object]) -> None:
             for field in ("score_value", "score_scale_min", "score_scale_max")
         ):
             raise ValueError("Coach contract rejects numeric score leakage")
+        codes = dimension.get("mapped_diagnosis_codes")
+        if not isinstance(codes, list | tuple) or dimension.get("rule_count") != len(set(codes)):
+            raise ValueError("Coach contract rejects inconsistent dimension rule_count")
+        status = dimension.get("status")
+        if status == "NOT_IMPLEMENTED":
+            if dimension.get("rule_count") != 0 or codes:
+                raise ValueError("Coach contract rejects inconsistent dimension status")
+        else:
+            evaluable = dimension.get("evaluable_rule_turn_count")
+            triggered = dimension.get("triggered_rule_turn_count")
+            not_triggered = dimension.get("not_triggered_rule_turn_count")
+            if (
+                not all(
+                    isinstance(value, int) and not isinstance(value, bool) and value >= 0
+                    for value in (evaluable, triggered, not_triggered)
+                )
+                or evaluable != triggered + not_triggered
+            ):
+                raise ValueError("Coach contract rejects inconsistent dimension counts")
+            expected = (
+                "NOT_EVALUABLE"
+                if evaluable == 0
+                else "PROVISIONAL_ISSUE_DETECTED"
+                if triggered > 0
+                else "NO_PROVISIONAL_ISSUE_DETECTED"
+            )
+            if status != expected:
+                raise ValueError("Coach contract rejects inconsistent dimension status")
+    from slopecoach_ml.scoring import (
+        DIAGNOSIS_DIMENSION_REGISTRY_SHA256,
+        SCORECARD_CONTRACT_VERSION,
+        SCORING_POLICY_VERSION,
+    )
+
+    if (
+        scorecard.get("contract_version") != SCORECARD_CONTRACT_VERSION
+        or scorecard.get("scoring_policy_version") != SCORING_POLICY_VERSION
+        or scorecard.get("diagnosis_dimension_registry_sha256")
+        != DIAGNOSIS_DIMENSION_REGISTRY_SHA256
+    ):
+        raise ValueError("Coach contract rejects incompatible ScoreCard semantics")
+    scorecard_provenance(scorecard)
 
 
 def scorecard_provenance(scorecard: dict[str, object]) -> dict[str, object]:
     provenance = scorecard.get("diagnosis_semantics_provenance")
     if not isinstance(provenance, dict):
         raise ValueError("Coach contract requires Diagnosis semantics provenance")
+    from slopecoach_ml.diagnosis import validate_diagnosis_semantics_provenance
+
+    validated = validate_diagnosis_semantics_provenance(provenance)
     aliases = {
         "version": "diagnosis_semantics_provenance_version",
         "diagnosis_contract_version": "diagnosis_contract_version",
@@ -265,4 +310,4 @@ def scorecard_provenance(scorecard: dict[str, object]) -> dict[str, object]:
     }
     if any(provenance.get(key) != scorecard.get(alias) for key, alias in aliases.items()):
         raise ValueError("Coach contract Diagnosis semantics provenance is inconsistent")
-    return dict(provenance)
+    return validated.to_dict()

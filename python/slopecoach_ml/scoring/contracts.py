@@ -148,6 +148,8 @@ class DimensionAssessment:
         else:
             if self.rule_count == 0 or not self.mapped_diagnosis_codes:
                 raise ValueError("implemented dimension requires mapped rules")
+            if self.rule_count != len(set(self.mapped_diagnosis_codes)):
+                raise ValueError("dimension rule_count must match unique mapped diagnosis codes")
             expected_status = (
                 DimensionAssessmentStatus.NOT_EVALUABLE
                 if self.evaluable_rule_turn_count == 0
@@ -183,6 +185,14 @@ class ScoreCard:
     overall_score_status: str = "NOT_CALIBRATED_GT_REQUIRED"
 
     def __post_init__(self) -> None:
+        from .registry import DIAGNOSIS_DIMENSION_REGISTRY_SHA256
+
+        if self.contract_version != SCORECARD_CONTRACT_VERSION:
+            raise ValueError("ScoreCard contract version is incompatible")
+        if self.scoring_policy_version != SCORING_POLICY_VERSION:
+            raise ValueError("ScoreCard scoring policy version is incompatible")
+        if self.diagnosis_dimension_registry_sha256 != DIAGNOSIS_DIMENSION_REGISTRY_SHA256:
+            raise ValueError("ScoreCard diagnosis dimension registry is incompatible")
         if (
             self.numeric_scoring_enabled is not False
             or self.overall_score is not None

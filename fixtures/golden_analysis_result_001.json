@@ -1,0 +1,72 @@
+{
+  "contract_version": "golden-analysis-result-v1",
+  "cases": [
+    {
+      "case_id": "ready-two-issues",
+      "source": {"source_video_id": "golden-video-001", "source_video_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "duration_us": 3000000, "width_px": 1920, "height_px": 1080},
+      "target_identity": {"state": "LOCKED", "safe_for_analysis": true, "selection_mode": "AUTO", "coverage": 1.0, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": []},
+      "sport_type": {"effective_sport_type": "SKI", "effective_source": "USER", "resolution_status": "USER_SELECTED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["SPORT_TYPE_USER_SELECTED_ROUTING_NOT_GT"]},
+      "turns": {"turn_candidate_count": 3, "qualified_turn_count": 3, "valid_turn_count": 3, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 3, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
+      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 9, "turn_feature_count": 7, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
+      "rule_statuses": {
+        "LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED", "TRIGGERED", "NOT_TRIGGERED"],
+        "BILATERAL_KNEE_ASYMMETRY_2D": ["TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],
+        "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"]
+      },
+      "expected": {"status": "READY", "primary_reason_code": null, "top_issue_count": 2, "practice_item_count": 2}
+    },
+    {
+      "case_id": "ready-no-triggers",
+      "source": {"source_video_id": "golden-video-002", "source_video_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      "target_identity": {"state": "LOCKED", "safe_for_analysis": true, "selection_mode": "AUTO", "coverage": 1.0, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": []},
+      "sport_type": {"effective_sport_type": "SKI", "effective_source": "AUTO", "resolution_status": "AUTO_RESOLVED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["AUTO_SPORT_TYPE_NOT_PRODUCT_VALIDATED"]},
+      "turns": {"turn_candidate_count": 3, "qualified_turn_count": 3, "valid_turn_count": 3, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 3, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
+      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 9, "turn_feature_count": 7, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
+      "rule_statuses": {
+        "LIMITED_KNEE_FLEXION_MODULATION_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],
+        "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],
+        "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"]
+      },
+      "expected": {"status": "READY", "primary_reason_code": null, "top_issue_count": 0, "practice_item_count": 0}
+    },
+    {
+      "case_id": "partial-no-turn",
+      "source": {"source_video_id": "golden-video-003", "source_video_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+      "target_identity": {"state": "LOCKED", "safe_for_analysis": true, "selection_mode": "AUTO", "coverage": 1.0, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": []},
+      "sport_type": {"effective_sport_type": "SKI", "effective_source": "USER", "resolution_status": "USER_SELECTED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["SPORT_TYPE_USER_SELECTED_ROUTING_NOT_GT"]},
+      "turns": {"turn_candidate_count": 0, "qualified_turn_count": 0, "valid_turn_count": 0, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 0, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
+      "biomechanics": null,
+      "upstream_status": "NOT_ANALYZABLE_NO_QUALIFIED_TURNS",
+      "rule_statuses": {},
+      "expected": {"status": "PARTIAL_ANALYSIS", "primary_reason_code": "NO_QUALIFIED_TURNS", "top_issue_count": 0, "practice_item_count": 0}
+    },
+    {
+      "case_id": "not-analyzable-target",
+      "source": {"source_video_id": "golden-video-004", "source_video_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+      "target_identity": {"state": "AMBIGUOUS", "safe_for_analysis": false, "selection_mode": "AUTO", "coverage": 0.4, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": ["TARGET_IDENTITY_UNCERTAIN"]},
+      "sport_type": {"effective_sport_type": "SKI", "effective_source": "AUTO", "resolution_status": "AUTO_RESOLVED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["AUTO_SPORT_TYPE_NOT_PRODUCT_VALIDATED"]},
+      "turns": null,
+      "biomechanics": null,
+      "rule_statuses": {
+        "LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED"],
+        "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED"],
+        "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED"]
+      },
+      "expected": {"status": "NOT_ANALYZABLE", "primary_reason_code": "TARGET_IDENTITY_UNCERTAIN", "top_issue_count": 0, "practice_item_count": 0}
+    },
+    {
+      "case_id": "legacy-metadata-partial",
+      "source": null,
+      "target_identity": null,
+      "sport_type": {"effective_sport_type": "SKI", "effective_source": "USER", "resolution_status": "USER_SELECTED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["SPORT_TYPE_USER_SELECTED_ROUTING_NOT_GT"]},
+      "turns": {"turn_candidate_count": 1, "qualified_turn_count": 1, "valid_turn_count": 1, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 1, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
+      "biomechanics": null,
+      "rule_statuses": {
+        "LIMITED_KNEE_FLEXION_MODULATION_2D": ["NOT_TRIGGERED"],
+        "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED"],
+        "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED"]
+      },
+      "expected": {"status": "PARTIAL_ANALYSIS", "primary_reason_code": "SOURCE_IDENTITY_UNAVAILABLE", "top_issue_count": 0, "practice_item_count": 0}
+    }
+  ]
+}

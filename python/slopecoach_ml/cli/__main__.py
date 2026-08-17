@@ -8,11 +8,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+from slopecoach_ml.analysis_result import run_analysis_result_golden
 from slopecoach_ml.benchmark import (
     RealPoseDebugCollector,
     SportTypeBenchmarkCollector,
     TargetIdentityDebugCollector,
     TemporalTurnCollector,
+    benchmark_analysis_result_artifact,
     benchmark_biomechanics_frames,
     benchmark_diagnosis_artifact,
     benchmark_golden,
@@ -233,6 +235,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scoring_coach.add_argument("artifact")
     scoring_coach.add_argument("--output")
+    analysis_result_golden = subparsers.add_parser(
+        "analysis-result-golden", help="run deterministic A9 result/report Golden"
+    )
+    analysis_result_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_analysis_result_001.json")
+    )
+    analysis_result_golden.add_argument("--output")
+    analysis_result_benchmark = subparsers.add_parser(
+        "benchmark-analysis-result", help="assemble A9 contracts from an A7 artifact"
+    )
+    analysis_result_benchmark.add_argument("artifact")
+    analysis_result_benchmark.add_argument("--output")
     prepare_sport_gt = subparsers.add_parser(
         "prepare-sport-type-gt", help="create UNLABELED manual SportType GT templates"
     )
@@ -363,6 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "benchmark-scoring-coach":
         result = benchmark_scoring_coach_artifact(args.artifact)
+        _write_json(result, args.output)
+        return 0
+    if args.command == "benchmark-analysis-result":
+        result = benchmark_analysis_result_artifact(args.artifact)
         _write_json(result, args.output)
         return 0
     if args.command == "build-sport-calibration-dataset":
@@ -506,6 +524,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "a8-provenance-golden":
         result = run_a8_provenance_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "analysis-result-golden":
+        result = run_analysis_result_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":

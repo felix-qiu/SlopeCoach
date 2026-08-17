@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden diagnosis-golden scorecard-golden coach-golden a8-provenance-golden benchmark benchmark-diagnosis benchmark-scoring-coach pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden diagnosis-golden scorecard-golden coach-golden a8-provenance-golden analysis-result-golden benchmark benchmark-diagnosis benchmark-scoring-coach benchmark-analysis-result pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -52,6 +52,9 @@ coach-golden:
 a8-provenance-golden:
 	$(UV) run --project python python -m slopecoach_ml.cli a8-provenance-golden
 
+analysis-result-golden:
+	$(UV) run --project python python -m slopecoach_ml.cli analysis-result-golden
+
 benchmark-diagnosis:
 	@test -n "$(ARTIFACT)" || (echo 'ARTIFACT is required' >&2; exit 2)
 	$(UV) run --project python python -m slopecoach_ml.cli benchmark-diagnosis "$(ARTIFACT)" --sport-type "$(or $(SPORT_TYPE),auto)" $(if $(OUTPUT),--output "$(OUTPUT)",)
@@ -59,6 +62,10 @@ benchmark-diagnosis:
 benchmark-scoring-coach:
 	@test -n "$(ARTIFACT)" || (echo 'ARTIFACT is required' >&2; exit 2)
 	$(UV) run --project python python -m slopecoach_ml.cli benchmark-scoring-coach "$(ARTIFACT)" $(if $(OUTPUT),--output "$(OUTPUT)",)
+
+benchmark-analysis-result:
+	@test -n "$(ARTIFACT)" || (echo 'ARTIFACT is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-analysis-result "$(ARTIFACT)" $(if $(OUTPUT),--output "$(OUTPUT)",)
 
 prepare-sport-type-gt:
 	@test -n "$(MANIFEST)" || (echo 'MANIFEST is required' >&2; exit 2)

@@ -50,6 +50,8 @@ def diagnosis_from_golden_case(case: dict[str, object]) -> dict[str, object]:
                     {
                         "diagnosis_code": code,
                         "evaluation_status": "TRIGGERED",
+                        "provisional": True,
+                        "validation_status": "UNVALIDATED_RESEARCH_RULE",
                         "affected_turn_ids": [turn_id],
                         "severity": None,
                         "confidence": None,

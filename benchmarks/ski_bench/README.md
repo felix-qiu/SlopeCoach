@@ -200,6 +200,24 @@ not-triggered, and not-evaluable turns for each of the three provisional rules. 
 clip has zero qualified turns, so it cannot validate turn-window diagnosis and must not be used to
 tune A4 or A7 thresholds. Turn and Diagnosis GT remain unavailable and all accuracy metrics null.
 
+A9 adds `ski-bench-analysis-result-v1`, a deterministic downstream-only assembly benchmark. It
+first applies the A8.1 diagnosis compatibility gate, then builds the nullable ScoreCard and
+controlled CoachReport before assembling the fixed eight-section `AnalysisResult v1` and its pure
+`ProductReport v1` projection. It does not rerun any detector, pose, tracking, SportType, turn, or
+biomechanics model. Runtime timings are diagnostic only and are excluded from both semantic SHAs.
+
+Legacy artifacts contribute only explicitly embedded facts. The current A7 clip provides
+SportType, turn count, and Diagnosis facts but no stable Source identity, Target Identity summary,
+or compact Biomechanics summary. Those sections therefore remain `UNAVAILABLE`; with zero
+qualified turns, the result is `PARTIAL_ANALYSIS / NO_QUALIFIED_TURNS`, with zero issues, zero
+practice items, and all scores null.
+
+```bash
+make benchmark-analysis-result \
+  ARTIFACT=artifacts/benchmarks/a7/ski_test_001_artifact_only.json \
+  OUTPUT=artifacts/benchmarks/a9/ski_test_001_analysis_result.json
+```
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

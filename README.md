@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A8.1: Downstream Contract and Provenance Hardening**. The code in
+SlopeCoach is currently in **Phase A9: Unified AnalysisResult v1 and ProductReport v1**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -41,6 +41,7 @@ python/slopecoach_ml/       Research/reference package
   diagnosis/                Turn-window, multi-frame provisional research rule engine
   scoring/                  Structure-only nullable scorecard and diagnosis-dimension mapping
   coach/                    Top-two issues, controlled drills and deterministic zh-CN templates
+  analysis_result/          Unified machine result and pure app-facing report projection
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -110,6 +111,8 @@ uv run --project python python -m slopecoach_ml.cli sport-type-golden
 uv run --project python python -m slopecoach_ml.cli scorecard-golden
 uv run --project python python -m slopecoach_ml.cli coach-golden
 uv run --project python python -m slopecoach_ml.cli benchmark-scoring-coach /path/to/a7.json
+uv run --project python python -m slopecoach_ml.cli analysis-result-golden
+uv run --project python python -m slopecoach_ml.cli benchmark-analysis-result /path/to/a7.json
 uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
   --visual-checkpoint artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
@@ -117,6 +120,52 @@ uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
 All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an artifact.
 Invalid inputs return a non-zero exit code. Exceptions are reported rather than converted into
 fake success.
+
+## A9 end-to-end product contract
+
+A9 introduces a stable research/reference boundary without introducing a new AI capability:
+
+```text
+validated upstream truth -> AnalysisResult v1 -> ProductReport v1
+```
+
+`AnalysisResult` is the machine semantic truth envelope. It carries a fixed ordered registry of
+eight compact sections (`SOURCE`, `TARGET_IDENTITY`, `SPORT_TYPE`, `TURNS`, `BIOMECHANICS`,
+`DIAGNOSIS`, `SCORECARD`, and `COACH`), explicit availability, blockers, limitations, Ground Truth
+status, semantic provenance, and a canonical content SHA. Missing legacy metadata remains missing;
+source identity is never inferred from a filename and unavailable sections never receive fake
+payloads.
+
+`ProductReport` is a pure projection of `AnalysisResult`. It cannot create or modify Diagnosis,
+scores, Top Issues, drills, evidence, or coaching copy. It reuses the validated ScoreCard and
+CoachReport exactly and is fingerprinted independently while binding to its source
+`analysis_result_sha256`. Runtime timing, local paths, and export timestamps are outside both
+semantic fingerprints, avoiding circular identity.
+
+Top-level statuses are `READY`, `PARTIAL_ANALYSIS`, and `NOT_ANALYZABLE`. `READY` means only that
+the currently implemented research output has enough trusted evidence; **READY does not mean
+scientific accuracy, Ground Truth validation, or production readiness**. The current
+`ski_test_001` A7 artifact remains `PARTIAL_ANALYSIS` because it contains zero qualified turns and
+does not embed Source, Target Identity, or compact Biomechanics summaries. The artifact-only A9
+benchmark performs deterministic downstream assembly and never reruns RTMDet, RTMW, equipment,
+CLIP, tracking, turn, or biomechanics models.
+
+All five ScoreCard dimensions remain structurally present. Numeric scoring is disabled, every
+dimension score and the overall score remain JSON `null`, and no-trigger output is never promoted
+to `GOOD_FORM`. Target Identity, SportType, turn segmentation, Diagnosis, and score Ground Truth
+are not created by A9. Normal CI remains video-free, checkpoint-free, Torch/OpenMMLab/CLIP-free,
+network-free, and LLM-free.
+
+```bash
+make analysis-result-golden
+make benchmark-analysis-result \
+  ARTIFACT=artifacts/benchmarks/a7/ski_test_001_artifact_only.json \
+  OUTPUT=artifacts/benchmarks/a9/ski_test_001_analysis_result.json
+```
+
+Python validates these provisional contracts and enables deterministic parity fixtures. A future
+Rust production Domain Kernel should emit equivalent `AnalysisResult v1`; native apps should
+primarily consume `ProductReport v1`. Rust and mobile implementation remain deferred.
 
 ## Golden fixture
 

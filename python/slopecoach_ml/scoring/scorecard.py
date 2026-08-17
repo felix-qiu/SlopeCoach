@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from slopecoach_ml.diagnosis import (
+    DIAGNOSIS_RULE_REGISTRY_SHA256,
     DiagnosisResult,
     build_diagnosis_semantics_provenance,
+    normalize_diagnosis_config,
     validate_diagnosis_semantics_provenance,
     validate_diagnosis_truth_consistency,
 )
@@ -132,6 +134,10 @@ def _resolve_provenance(result, payload, explicit, *, trusted_current_process):
     provenance = validate_diagnosis_semantics_provenance(source)
     if provenance.diagnosis_contract_version != payload.get("contract_version"):
         raise ValueError("DIAGNOSIS_CONTRACT_INCOMPATIBLE")
+    if provenance.diagnosis_config != normalize_diagnosis_config(payload.get("config")):
+        raise ValueError("DIAGNOSIS_CONFIG_PROVENANCE_MISMATCH")
+    if provenance.diagnosis_rule_registry_sha256 != DIAGNOSIS_RULE_REGISTRY_SHA256:
+        raise ValueError("DIAGNOSIS_RULE_REGISTRY_INCOMPATIBLE")
     return provenance
 
 
