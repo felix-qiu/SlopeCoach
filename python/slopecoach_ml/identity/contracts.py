@@ -98,6 +98,12 @@ class TargetIdentityConfig:
     candidate_quality_weight: float = 0.05
     pose_weight: float = 0.10
     maximum_trajectory_prediction_us: int = 1_500_000
+    maximum_scale_transition_similarity: float = 0.50
+    minimum_scale_recovery_appearance_similarity: float = 0.80
+    minimum_scale_recovery_trajectory_similarity: float = 0.60
+    minimum_scale_recovery_spatial_similarity: float = 0.30
+    minimum_scale_recovery_body_proportion_similarity: float = 0.75
+    minimum_scale_recovery_candidate_quality: float = 0.60
 
     def validate(self) -> None:
         for name in (
@@ -112,6 +118,12 @@ class TargetIdentityConfig:
             "appearance_weight",
             "candidate_quality_weight",
             "pose_weight",
+            "maximum_scale_transition_similarity",
+            "minimum_scale_recovery_appearance_similarity",
+            "minimum_scale_recovery_trajectory_similarity",
+            "minimum_scale_recovery_spatial_similarity",
+            "minimum_scale_recovery_body_proportion_similarity",
+            "minimum_scale_recovery_candidate_quality",
         ):
             value = getattr(self, name)
             if not math.isfinite(value) or not 0 <= value <= 1:

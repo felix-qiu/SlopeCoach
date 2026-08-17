@@ -8,6 +8,7 @@ import pytest
 from slopecoach_ml.benchmark.biomechanics_debug import (
     _containing_turn,
     _draw_temporal_skeleton,
+    _overlay_point_radius,
     write_biomechanics_overlay_video,
 )
 from slopecoach_ml.cli.__main__ import _temporal_collector, build_parser
@@ -170,8 +171,8 @@ def test_skeleton_provenance_skips_missing_coordinates_safely():
     assert len(cv2.circles) == 2
     assert cv2.lines[0][2:] == ((0, 255, 0), 2, cv2.LINE_AA)
     assert cv2.circles == [
-        ((2, 2), 5, (0, 255, 255), -1, cv2.LINE_AA),
-        ((4, 4), 5, (0, 255, 255), 2, cv2.LINE_AA),
+        ((2, 2), 2, (0, 255, 255), -1, cv2.LINE_AA),
+        ((4, 4), 2, (0, 255, 255), 2, cv2.LINE_AA),
     ]
 
 
@@ -186,7 +187,29 @@ def test_overlay_hides_eye_and_ear_landmarks_but_keeps_one_head_point():
     }
     _draw_temporal_skeleton(cv2, FakeCanvas(), joints)
     assert len(cv2.circles) == 1
-    assert cv2.circles[0] == ((11, 21), 5, (0, 255, 255), -1, cv2.LINE_AA)
+    assert cv2.circles[0] == ((11, 21), 2, (0, 255, 255), -1, cv2.LINE_AA)
+
+
+def test_overlay_point_radius_scales_with_pose_height_and_is_bounded():
+    assert _overlay_point_radius({"nose": _joint("OBSERVED", stabilized=(10, 10))}) == 2
+    assert (
+        _overlay_point_radius(
+            {
+                "nose": _joint("OBSERVED", stabilized=(10, 10)),
+                "left_ankle": _joint("OBSERVED", stabilized=(10, 310)),
+            }
+        )
+        == 4
+    )
+    assert (
+        _overlay_point_radius(
+            {
+                "nose": _joint("OBSERVED", stabilized=(10, 0)),
+                "left_ankle": _joint("OBSERVED", stabilized=(10, 1000)),
+            }
+        )
+        == 5
+    )
 
 
 def test_turn_label_only_uses_complete_existing_segment_containment():

@@ -162,6 +162,31 @@ class TargetIdentityManager:
         score = weighted_available(values, weights) or 0.0
         return IdentityMatch(track.track_id, score * evidence.reliability, evidence)
 
+    def _scale_transition_recovery_allowed(self, match: IdentityMatch) -> bool:
+        """Require independent strong evidence before forgiving an abrupt bbox-scale change."""
+        evidence = match.evidence
+        required = (
+            evidence.bbox_scale_similarity,
+            evidence.appearance_similarity,
+            evidence.trajectory_similarity,
+            evidence.spatial_similarity,
+            evidence.body_proportion_similarity,
+            evidence.candidate_quality,
+        )
+        if any(value is None for value in required):
+            return False
+        return (
+            evidence.bbox_scale_similarity <= self.config.maximum_scale_transition_similarity
+            and evidence.appearance_similarity
+            >= self.config.minimum_scale_recovery_appearance_similarity
+            and evidence.trajectory_similarity
+            >= self.config.minimum_scale_recovery_trajectory_similarity
+            and evidence.spatial_similarity >= self.config.minimum_scale_recovery_spatial_similarity
+            and evidence.body_proportion_similarity
+            >= self.config.minimum_scale_recovery_body_proportion_similarity
+            and evidence.candidate_quality >= self.config.minimum_scale_recovery_candidate_quality
+        )
+
     def update(
         self,
         tracks,
@@ -258,7 +283,10 @@ class TargetIdentityManager:
         best = matches[0]
         runner = matches[1].fused_score if len(matches) > 1 else None
         margin = best.fused_score - runner if runner is not None else best.fused_score
-        if best.fused_score < self.config.minimum_lock_score:
+        if (
+            best.fused_score < self.config.minimum_lock_score
+            and not self._scale_transition_recovery_allowed(best)
+        ):
             self.identity.state = TargetIdentityState.LOST
             return tuple(matches)
         if margin < self.config.minimum_winner_margin:

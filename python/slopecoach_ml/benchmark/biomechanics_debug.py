@@ -212,6 +212,7 @@ def write_biomechanics_overlay_video(
 
 
 def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> None:
+    point_radius = _overlay_point_radius(joints)
     for first, second in COCO17_EDGES:
         a, b = joints.get(first.value), joints.get(second.value)
         if not isinstance(a, dict) or not isinstance(b, dict):
@@ -228,7 +229,21 @@ def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> No
         if stable is None:
             continue
         thickness = 2 if point.get("provenance") == "INTERPOLATED" else -1
-        cv2.circle(canvas, stable, 5, (0, 255, 255), thickness, cv2.LINE_AA)
+        cv2.circle(canvas, stable, point_radius, (0, 255, 255), thickness, cv2.LINE_AA)
+
+
+def _overlay_point_radius(joints: dict[str, Any]) -> int:
+    y_coordinates = [
+        point["stabilized_y_px"]
+        for joint_name, point in joints.items()
+        if joint_name in _BODY_OVERLAY_JOINTS
+        and isinstance(point, dict)
+        and _point(point, "stabilized") is not None
+    ]
+    if len(y_coordinates) < 2:
+        return 2
+    pose_height = max(y_coordinates) - min(y_coordinates)
+    return max(2, min(5, int(pose_height * 0.012 + 0.5)))
 
 
 def _point(point: dict[str, Any], prefix: str):

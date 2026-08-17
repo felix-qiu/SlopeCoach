@@ -312,6 +312,70 @@ def test_target_and_track_identity_are_structurally_distinct_and_relock_new_trac
     assert manager.relock_count == 1
 
 
+def test_scale_transition_recovery_requires_two_strong_independent_observations() -> (
+    None
+):
+    manager = TargetIdentityManager()
+    original = track(7, 300)
+    manager.initialize(original, 0.9, 0, descriptor=(1, 0))
+    manager.update((), {}, 800_000)
+    manager.update((), {}, 900_000)
+    assert manager.identity.state is TargetIdentityState.LOST
+
+    replacement = TrackObservation(
+        12,
+        12,
+        BoundingBox2D(245, 0, 250, 500),
+        0.9,
+        TrackState.CONFIRMED,
+        3,
+        0,
+        1_000_000,
+        0,
+        20.0,
+        0.0,
+    )
+    replacement_candidate = candidate(replacement, quality=0.7)
+    first = manager.update(
+        (replacement,), {12: replacement_candidate}, 1_000_000, descriptors={12: (1, 0)}
+    )
+    assert first[0].fused_score < manager.config.minimum_lock_score
+    assert manager.identity.state is TargetIdentityState.RECOVERING
+    manager.update(
+        (replacement,), {12: replacement_candidate}, 1_100_000, descriptors={12: (1, 0)}
+    )
+    assert manager.identity.state is TargetIdentityState.LOCKED
+    assert manager.identity.active_track_id == 12
+
+
+def test_scale_transition_recovery_rejects_weak_appearance() -> None:
+    manager = TargetIdentityManager()
+    original = track(7, 300)
+    manager.initialize(original, 0.9, 0, descriptor=(1, 0))
+    manager.update((), {}, 800_000)
+    manager.update((), {}, 900_000)
+    replacement = TrackObservation(
+        12,
+        12,
+        BoundingBox2D(245, 0, 250, 500),
+        0.9,
+        TrackState.CONFIRMED,
+        3,
+        0,
+        1_000_000,
+        0,
+        20.0,
+        0.0,
+    )
+    manager.update(
+        (replacement,),
+        {12: candidate(replacement, quality=0.7)},
+        1_000_000,
+        descriptors={12: (0, 1)},
+    )
+    assert manager.identity.state is TargetIdentityState.LOST
+
+
 def test_trajectory_prediction_is_distinct_from_spatial_and_uses_time() -> None:
     manager = TargetIdentityManager(
         TargetIdentityConfig(maximum_trajectory_prediction_us=2_000_000)
