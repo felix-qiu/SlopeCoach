@@ -1,5 +1,6 @@
 from .biomechanics_debug import write_biomechanics_debug_artifacts
 from .biomechanics_features import benchmark_biomechanics_frames
+from .diagnosis import benchmark_diagnosis_artifact
 from .harness import benchmark_golden, benchmark_video
 from .real_dataset import (
     BiomechanicsDatasetValidationConfig,
@@ -35,6 +36,7 @@ __all__ = [
     "benchmark_golden",
     "aggregate_biomechanics_dataset",
     "benchmark_biomechanics_frames",
+    "benchmark_diagnosis_artifact",
     "benchmark_real_pose_frames",
     "benchmark_target_identity_frames",
     "benchmark_sport_type_frames",

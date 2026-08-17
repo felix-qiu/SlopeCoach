@@ -70,6 +70,8 @@ def apply_calibrated_fusion(
     incompatible = False
     epsilon = artifact["fit_config"]["probability_epsilon"]
     for summary in summaries:
+        if summary.get("raw_direction") is None:
+            continue
         channel = channels.get(summary["calibration_channel_id"])
         if channel is None:
             continue

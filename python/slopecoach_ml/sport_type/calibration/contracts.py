@@ -46,6 +46,7 @@ class CalibrationChannelStatus(StrEnum):
     REJECTED_NO_BRIER_IMPROVEMENT = "REJECTED_NO_BRIER_IMPROVEMENT"
     REJECTED_NO_LOG_LOSS_IMPROVEMENT = "REJECTED_NO_LOG_LOSS_IMPROVEMENT"
     REJECTED_FIT_FAILURE = "REJECTED_FIT_FAILURE"
+    CALIBRATION_CHANNEL_PROVENANCE_MISMATCH = "CALIBRATION_CHANNEL_PROVENANCE_MISMATCH"
 
 
 class CalibratedFusionStatus(StrEnum):
@@ -84,12 +85,23 @@ class SportCalibrationFitConfig:
     profile: str = CALIBRATION_PROFILE
 
     def __post_init__(self) -> None:
+        for name in (
+            "minimum_labeled_sources_per_class",
+            "preferred_labeled_sources_per_class",
+            "cross_validation_folds",
+            "maximum_newton_iterations",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"{name} must be a non-bool integer")
         if self.minimum_labeled_sources_per_class < 1:
             raise ValueError("minimum_labeled_sources_per_class must be positive")
         if self.preferred_labeled_sources_per_class < self.minimum_labeled_sources_per_class:
             raise ValueError("preferred labeled source count cannot be below minimum")
         if self.cross_validation_folds < 3:
             raise ValueError("cross_validation_folds must be at least 3")
+        if self.maximum_newton_iterations < 1:
+            raise ValueError("maximum_newton_iterations must be positive")
         for name in (
             "l2_regularization",
             "convergence_tolerance",

@@ -15,6 +15,7 @@ from .contracts import (
     SportCalibrationFitConfig,
     strict_json,
 )
+from .dataset import semantic_dataset_payload
 from .platt import CalibrationSample, evaluate_channel
 
 
@@ -26,7 +27,8 @@ def fit_calibration_artifact(
     resolved = config or SportCalibrationFitConfig()
     annotations = dataset.get("annotations", {})
     by_channel = defaultdict(list)
-    provenance = {}
+    provenance: dict[str, dict[str, object]] = {}
+    provenance_signatures: dict[str, set[tuple[object, ...]]] = defaultdict(set)
     for summary in dataset.get("source_samples", []):
         annotation = annotations.get(summary["source_video_id"])
         if not annotation:
@@ -42,6 +44,8 @@ def fit_calibration_artifact(
         if summary["raw_direction"] is None:
             continue
         channel = summary["calibration_channel_id"]
+        relevant = _calibration_provenance(summary)
+        provenance_signatures[channel].add(tuple(sorted(relevant.items())))
         by_channel[channel].append(
             CalibrationSample(
                 summary["source_video_id"],
@@ -52,7 +56,15 @@ def fit_calibration_artifact(
         provenance[channel] = summary.get("provenance", {})
     cv_started = time.perf_counter()
     evaluations = {
-        channel: evaluate_channel(samples, str(dataset["dataset_id"]), resolved)
+        channel: (
+            {"status": CalibrationChannelStatus.CALIBRATION_CHANNEL_PROVENANCE_MISMATCH.value}
+            if len(provenance_signatures[channel]) != 1
+            or any(
+                key == "_missing_required_provenance" and value
+                for key, value in next(iter(provenance_signatures[channel]), ())
+            )
+            else evaluate_channel(samples, str(dataset["dataset_id"]), resolved)
+        )
         for channel, samples in sorted(by_channel.items())
     }
     cv_seconds = time.perf_counter() - cv_started
@@ -81,6 +93,22 @@ def fit_calibration_artifact(
             "classification_accuracy_at_0_5": None,
             "ece_5_bin": None,
         }
+        defaults = {
+            "sample_count": 0,
+            "ski_count": 0,
+            "snowboard_count": 0,
+            "effective_cv_folds": 0,
+            "fold_assignment": {},
+            "brier_score": None,
+            "log_loss": None,
+            "prior_only_brier_score": None,
+            "prior_only_log_loss": None,
+            "brier_skill_vs_prior": None,
+            "log_loss_improvement_vs_prior": None,
+            "classification_accuracy_at_0_5": None,
+            "ece_5_bin": None,
+        }
+        evaluation = {**defaults, **evaluation}
         accepted = evaluation["status"] == CalibrationChannelStatus.ACCEPTED_RESEARCH_CALIBRATION
         final_fit = evaluation.get("final_fit", {})
         total = evaluation["ski_count"] + evaluation["snowboard_count"]
@@ -115,7 +143,9 @@ def fit_calibration_artifact(
         "calibration_artifact_sha256": "",
         "dataset": {
             "dataset_id": dataset["dataset_id"],
-            "dataset_sha256": hashlib.sha256(strict_json(dataset).encode()).hexdigest(),
+            "dataset_sha256": hashlib.sha256(
+                strict_json(semantic_dataset_payload(dataset)).encode()
+            ).hexdigest(),
             "independent_labeled_source_count": dataset["labeled_source_count"],
             "ski_source_count": dataset["ski_labeled_source_count"],
             "snowboard_source_count": dataset["snowboard_labeled_source_count"],
@@ -149,7 +179,19 @@ def fit_calibration_artifact(
 def artifact_fingerprint(payload: dict[str, object]) -> str:
     canonical = dict(payload)
     canonical.pop("calibration_artifact_sha256", None)
+    canonical.pop("performance", None)
     return hashlib.sha256(strict_json(canonical).encode()).hexdigest()
+
+
+def _calibration_provenance(summary: dict[str, object]) -> dict[str, object]:
+    provenance = summary.get("provenance", {})
+    required = ["model_id", "checkpoint_sha256"]
+    if summary.get("evidence_kind") == "VISUAL_CLASSIFIER":
+        required.append("visual_prompt_sha256")
+    result = {key: provenance.get(key) for key in required}
+    if any(value is None for value in result.values()):
+        return {**result, "_missing_required_provenance": True}
+    return result
 
 
 def validate_artifact_fingerprint(payload: dict[str, object]) -> bool:

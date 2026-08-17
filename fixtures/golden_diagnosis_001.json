@@ -1,0 +1,114 @@
+{
+  "contract_version": "golden-diagnosis-v1",
+  "cases": [
+    {
+      "case_id": "no-trigger",
+      "sport_type": "SKI",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [90, 80, 70, 80, 90],
+      "knee_differences_deg": [2, 3, 4, 3, 2],
+      "phase_offset": 0.0,
+      "expected": {
+        "result_status": "EXECUTED_NO_PROVISIONAL_RULES_TRIGGERED",
+        "diagnosis_codes": [],
+        "statistics": {
+          "LIMITED_KNEE_FLEXION_MODULATION_2D": 20.0,
+          "BILATERAL_KNEE_ASYMMETRY_2D": 3.0,
+          "KNEE_FLEXION_TIMING_OFFSET_2D": 0.0
+        },
+        "evidence_timestamps_us": [0, 250000, 500000, 750000, 1000000]
+      }
+    },
+    {
+      "case_id": "limited-modulation",
+      "sport_type": "SNOWBOARD",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [80, 82, 85, 83, 81],
+      "knee_differences_deg": [2, 2, 3, 2, 2],
+      "phase_offset": 0.0,
+      "expected": {
+        "result_status": "EXECUTED_WITH_PROVISIONAL_DIAGNOSES",
+        "diagnosis_codes": ["LIMITED_KNEE_FLEXION_MODULATION_2D"],
+        "statistics": {"LIMITED_KNEE_FLEXION_MODULATION_2D": 5.0},
+        "evidence_timestamps_us": [0, 250000, 500000, 750000, 1000000]
+      }
+    },
+    {
+      "case_id": "asymmetry",
+      "sport_type": "SKI",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [90, 80, 70, 80, 90],
+      "knee_differences_deg": [9, 10, 12, 11, 10],
+      "phase_offset": 0.0,
+      "expected": {
+        "result_status": "EXECUTED_WITH_PROVISIONAL_DIAGNOSES",
+        "diagnosis_codes": ["BILATERAL_KNEE_ASYMMETRY_2D"],
+        "statistics": {"BILATERAL_KNEE_ASYMMETRY_2D": 10.0},
+        "evidence_timestamps_us": [0, 250000, 500000, 750000, 1000000]
+      }
+    },
+    {
+      "case_id": "timing-offset",
+      "sport_type": "SNOWBOARD",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [90, 80, 70, 80, 90],
+      "knee_differences_deg": [2, 3, 4, 3, 2],
+      "phase_offset": 0.3,
+      "expected": {
+        "result_status": "EXECUTED_WITH_PROVISIONAL_DIAGNOSES",
+        "diagnosis_codes": ["KNEE_FLEXION_TIMING_OFFSET_2D"],
+        "statistics": {"KNEE_FLEXION_TIMING_OFFSET_2D": 0.3},
+        "evidence_timestamps_us": [0, 250000, 500000, 750000, 1000000]
+      }
+    },
+    {
+      "case_id": "all-three",
+      "sport_type": "SKI",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [80, 82, 85, 83, 81],
+      "knee_differences_deg": [10, 11, 12, 10, 11],
+      "phase_offset": -0.3,
+      "expected": {
+        "result_status": "EXECUTED_WITH_PROVISIONAL_DIAGNOSES",
+        "diagnosis_codes": ["LIMITED_KNEE_FLEXION_MODULATION_2D", "BILATERAL_KNEE_ASYMMETRY_2D", "KNEE_FLEXION_TIMING_OFFSET_2D"],
+        "statistics": {"LIMITED_KNEE_FLEXION_MODULATION_2D": 5.0, "BILATERAL_KNEE_ASYMMETRY_2D": 11.0, "KNEE_FLEXION_TIMING_OFFSET_2D": 0.3},
+        "evidence_timestamps_us": [0, 250000, 500000, 750000, 1000000]
+      }
+    },
+    {
+      "case_id": "partial-turn",
+      "sport_type": "SKI",
+      "turn_status": "PARTIAL",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [80, 82, 85, 83, 81],
+      "knee_differences_deg": [10, 11, 12, 10, 11],
+      "phase_offset": 0.3,
+      "expected": {
+        "result_status": "NOT_ANALYZABLE_INSUFFICIENT_DIAGNOSIS_EVIDENCE",
+        "diagnosis_codes": [],
+        "statistics": {},
+        "evidence_timestamps_us": []
+      }
+    },
+    {
+      "case_id": "unknown-sport",
+      "sport_type": "UNKNOWN",
+      "turn_status": "VALID",
+      "timestamps_us": [0, 250000, 500000, 750000, 1000000],
+      "knee_angles_deg": [80, 82, 85, 83, 81],
+      "knee_differences_deg": [10, 11, 12, 10, 11],
+      "phase_offset": 0.3,
+      "expected": {
+        "result_status": "NOT_ANALYZABLE_SPORT_TYPE_UNKNOWN",
+        "diagnosis_codes": [],
+        "statistics": {},
+        "evidence_timestamps_us": []
+      }
+    }
+  ]
+}

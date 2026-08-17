@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON_PROJECT := python/pyproject.toml
 FIXTURE := fixtures/golden_pose_001.json
 
-.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden benchmark pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
+.PHONY: doctor python test lint golden temporal-golden turn-golden biomechanics-golden sport-type-golden sport-calibration-golden diagnosis-golden benchmark benchmark-diagnosis pose-doctor sport-equipment-doctor sport-visual-doctor prepare-visual-sport-model pose-smoke benchmark-real-pose benchmark-target-identity benchmark-temporal-turns benchmark-biomechanics benchmark-sport-type prepare-biomechanics-dataset benchmark-biomechanics-dataset prepare-target-gt prepare-sport-type-gt build-sport-calibration-dataset fit-sport-evidence-calibration openmmlab-macos
 
 doctor:
 	@command -v git >/dev/null && git --version
@@ -39,6 +39,13 @@ sport-type-golden:
 
 sport-calibration-golden:
 	$(UV) run --project python python -m slopecoach_ml.cli sport-calibration-golden
+
+diagnosis-golden:
+	$(UV) run --project python python -m slopecoach_ml.cli diagnosis-golden
+
+benchmark-diagnosis:
+	@test -n "$(ARTIFACT)" || (echo 'ARTIFACT is required' >&2; exit 2)
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-diagnosis "$(ARTIFACT)" --sport-type "$(or $(SPORT_TYPE),auto)" $(if $(OUTPUT),--output "$(OUTPUT)",)
 
 prepare-sport-type-gt:
 	@test -n "$(MANIFEST)" || (echo 'MANIFEST is required' >&2; exit 2)
@@ -93,7 +100,7 @@ benchmark-biomechanics:
 
 benchmark-sport-type:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-sport-type VIDEO=/path/to/video' >&2; exit 2)
-	$(if $(OPENML_PY),PYTHONPATH=python $(OPENML_PY),$(UV) run --project python python) -m slopecoach_ml.cli benchmark-sport-type "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --sport-type "$(or $(SPORT_TYPE),auto)" --equipment-provider "$(or $(EQUIPMENT_PROVIDER),none)" --visual-provider "$(or $(VISUAL_PROVIDER),none)" --input-non-mirrored $(if $(EQUIPMENT_CONFIG),--equipment-config "$(EQUIPMENT_CONFIG)",) $(if $(EQUIPMENT_CHECKPOINT),--equipment-checkpoint "$(EQUIPMENT_CHECKPOINT)",) $(if $(VISUAL_CHECKPOINT),--visual-checkpoint "$(VISUAL_CHECKPOINT)",) $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+	$(if $(OPENML_PY),PYTHONPATH=python $(OPENML_PY),$(UV) run --project python python) -m slopecoach_ml.cli benchmark-sport-type "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --sport-type "$(or $(SPORT_TYPE),auto)" --equipment-provider "$(or $(EQUIPMENT_PROVIDER),none)" --visual-provider "$(or $(VISUAL_PROVIDER),none)" --input-non-mirrored $(if $(SOURCE_VIDEO_ID),--source-video-id "$(SOURCE_VIDEO_ID)",) $(if $(EQUIPMENT_CONFIG),--equipment-config "$(EQUIPMENT_CONFIG)",) $(if $(EQUIPMENT_CHECKPOINT),--equipment-checkpoint "$(EQUIPMENT_CHECKPOINT)",) $(if $(VISUAL_CHECKPOINT),--visual-checkpoint "$(VISUAL_CHECKPOINT)",) $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
 
 prepare-biomechanics-dataset:
 	@test -n "$(VIDEO_DIR)" || (echo 'usage: make prepare-biomechanics-dataset VIDEO_DIR=benchmarks/ski_bench/videos OUTPUT=artifacts/manifests/biomechanics_real.local.json' >&2; exit 2)

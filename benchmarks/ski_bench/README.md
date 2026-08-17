@@ -193,6 +193,13 @@ evaluation, and same-kind-mean/cross-kind-sum estimated LLR fusion. Generated GT
 UNLABELED/UNCONFIRMED, and no calibration is fitted until both classes meet the independent-source
 minimum. The existing A6.2 v3 artifact can be extracted without rerunning any vision model.
 
+A7 adds the artifact-only `ski-bench-diagnosis-v1` report. It consumes persisted effective
+SportType, complete turn segments, and A5 frame/turn facts; it never reruns detection, pose,
+identity, SportType evidence, or segmentation. Reports separate evaluable, triggered,
+not-triggered, and not-evaluable turns for each of the three provisional rules. The current real
+clip has zero qualified turns, so it cannot validate turn-window diagnosis and must not be used to
+tune A4 or A7 thresholds. Turn and Diagnosis GT remain unavailable and all accuracy metrics null.
+
 ```bash
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/ski_test_001.mp4 SAMPLE_FPS=5 \

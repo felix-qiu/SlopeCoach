@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A6.3: SportType Evidence Calibration Research**. The code in
+SlopeCoach is currently in **Phase A7: Evidence-backed Diagnosis Research Foundation**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -38,6 +38,7 @@ python/slopecoach_ml/       Research/reference package
   turns/                    Image-space proxy, extrema, crossings and provisional segments
   sport_type/               Auto-first sport contracts, fusion, providers, cues and routing gate
     calibration/            Manual GT, source aggregation, Platt calibration and diagnostic LLR fusion
+  diagnosis/                Turn-window, multi-frame provisional research rule engine
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -303,6 +304,42 @@ Calibration artifacts are model/checkpoint/provider specific; visual channels ad
 the visual prompt SHA. Model, checkpoint, prompt, preprocessing, or raw-support semantic drift
 requires recalibration. Artifacts and calibrated fusion remain research-only. User SportType is
 authoritative; production SportType fusion remains deferred to Rust/mobile implementation.
+
+## A7 provisional diagnosis foundation
+
+A7 adds a deterministic, evidence-backed research diagnosis layer after effective SportType,
+qualified complete turns, and A5 biomechanics facts. It consumes upstream facts without changing
+target identity, SportType, turn segmentation, or biomechanics formulas. UNKNOWN SportType blocks
+sport-specific diagnosis. USER-selected SportType permits research routing but is not ground
+truth; unvalidated RAW_V1 AUTO resolution is explicitly limited. A6.3 calibrated diagnostics do
+not control A7 routing.
+
+The registry contains exactly three provisional image-space rules:
+
+- `LIMITED_KNEE_FLEXION_MODULATION_2D`
+- `BILATERAL_KNEE_ASYMMETRY_2D`
+- `KNEE_FLEXION_TIMING_OFFSET_2D`
+
+Every rule requires a complete qualified turn and at least five AVAILABLE samples with 0.60
+coverage inside the exact turn, temporal segment, and signal run. Defaults—12 degrees knee-angle
+range, 10 degrees median bilateral difference, and 0.20 absolute phase offset—are engineering
+research thresholds, not coach-certified or product-validated semantics. Missing evidence is
+`NOT_EVALUABLE`; sufficient evidence below threshold is `NOT_TRIGGERED`. No trigger does not mean
+GOOD_FORM.
+
+```bash
+make diagnosis-golden
+make benchmark-diagnosis \
+  ARTIFACT=artifacts/benchmarks/a5_1/ski_test_001_5fps.json \
+  SPORT_TYPE=ski OUTPUT=artifacts/benchmarks/a7/ski_test_001.json
+```
+
+The artifact benchmark is model-free and refuses inputs lacking persisted turn and biomechanics
+facts. Diagnosis severity and confidence are JSON `null`; neither coverage nor threshold margin is
+renamed as confidence. Diagnosis GT and Turn GT are unavailable, so precision, recall, F1, and
+agreement remain null. There is no physical COM, pressure, edge angle, scoring, drills, coaching
+text, XGBoost, or real diagnosis-accuracy claim. Python remains research/reference only; the
+production Rust/mobile implementation is deferred.
 
 ## Real ski-video benchmark and artifacts
 

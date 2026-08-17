@@ -56,6 +56,7 @@ def benchmark_sport_type_frames(
     evidence_providers=None,
     config: SportTypeConfig | None = None,
     calibration_artifact=None,
+    source_video_id=None,
 ):
     started = time.perf_counter()
     sink = collector or SportTypeBenchmarkCollector()
@@ -164,7 +165,7 @@ def benchmark_sport_type_frames(
                 summarize_observations(
                     provider_name=provider_result.provider_name,
                     evidence_kind=provider_result.evidence_kind,
-                    source_video_id=source_path.stem,
+                    source_video_id=source_video_id or source_path.stem,
                     video_sha256=video_sha256,
                     observations=[item.to_dict() for item in provider_result.observations],
                     provenance=provenance_by_provider.get(provider_result.provider_name, {}),
@@ -178,6 +179,8 @@ def benchmark_sport_type_frames(
     upstream_perf = upstream["performance"]
     report = {
         "benchmark_contract_version": SPORT_TYPE_BENCHMARK_CONTRACT_VERSION,
+        "source_video_id": source_video_id or Path(input_path).stem,
+        "source_video_id_origin": "EXPLICIT" if source_video_id else "LEGACY_INFERRED",
         "visual_prompt_schema_version": VISUAL_SPORT_PROMPT_SCHEMA_VERSION,
         "visual_prompt_sha256": visual_prompt_sha256(),
         "input_kind": "REAL_VIDEO",

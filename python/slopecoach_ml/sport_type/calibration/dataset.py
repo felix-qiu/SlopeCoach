@@ -13,6 +13,7 @@ from .contracts import (
     SPORT_TYPE_CALIBRATION_DATASET_VERSION,
     SPORT_TYPE_GT_CONTRACT_VERSION,
     GroundTruthSportType,
+    SportCalibrationFitConfig,
     SportTypeGroundTruth,
     strict_json,
 )
@@ -66,8 +67,11 @@ def prepare_sport_type_gt(manifest_path: str | Path, output_dir: str | Path) -> 
 
 
 def build_calibration_dataset(
-    artifact_paths: list[str | Path], annotations_dir: str | Path | None = None
+    artifact_paths: list[str | Path],
+    annotations_dir: str | Path | None = None,
+    config: SportCalibrationFitConfig | None = None,
 ) -> dict[str, object]:
+    settings = config or SportCalibrationFitConfig()
     started = time.perf_counter()
     summaries = []
     clip_records = []
@@ -95,7 +99,12 @@ def build_calibration_dataset(
         else:
             raise ValueError("artifact lacks video SHA and source video is unavailable")
         clip_id = Path(str(video.get("path", path.stem))).stem
-        source_id = str(artifact.get("source_video_id", clip_id))
+        explicit_source_id = artifact.get("source_video_id")
+        source_id = str(explicit_source_id or clip_id)
+        source_id_origin = str(
+            artifact.get("source_video_id_origin")
+            or ("EXPLICIT" if explicit_source_id else "LEGACY_INFERRED")
+        )
         model_maps = {
             SportEvidenceKind.EQUIPMENT: {
                 item["provider_name"]: item for item in artifact.get("equipment_models", [])
@@ -124,6 +133,7 @@ def build_calibration_dataset(
             {
                 "clip_id": clip_id,
                 "source_video_id": source_id,
+                "source_video_id_origin": source_id_origin,
                 "video_sha256": video_sha,
                 "source_artifact": str(path),
             }
@@ -177,8 +187,9 @@ def build_calibration_dataset(
         "performance": {"dataset_extraction_seconds": time.perf_counter() - started},
         "status": (
             "READY_FOR_CALIBRATION_FIT"
-            if counts["ski_labeled_source_count"] >= 10
-            and counts["snowboard_labeled_source_count"] >= 10
+            if counts["ski_labeled_source_count"] >= settings.minimum_labeled_sources_per_class
+            and counts["snowboard_labeled_source_count"]
+            >= settings.minimum_labeled_sources_per_class
             else "INSUFFICIENT_LABELED_SPORT_TYPE_GT"
         ),
         "limitations": [
@@ -187,9 +198,16 @@ def build_calibration_dataset(
             "PYTHON_RESEARCH_REFERENCE_ONLY",
         ],
     }
-    canonical = strict_json({**payload, "dataset_id": None, "performance": None})
+    canonical = strict_json(semantic_dataset_payload(payload))
     payload["dataset_id"] = hashlib.sha256(canonical.encode()).hexdigest()
     return payload
+
+
+def semantic_dataset_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Return deterministic dataset semantics without runtime measurements or self-ID."""
+    return {
+        key: value for key, value in payload.items() if key not in {"dataset_id", "performance"}
+    }
 
 
 def _load_annotations(path: str | Path | None) -> dict[str, SportTypeGroundTruth]:

@@ -14,6 +14,7 @@ from slopecoach_ml.benchmark import (
     TargetIdentityDebugCollector,
     TemporalTurnCollector,
     benchmark_biomechanics_frames,
+    benchmark_diagnosis_artifact,
     benchmark_golden,
     benchmark_real_pose_frames,
     benchmark_sport_type_frames,
@@ -33,6 +34,7 @@ from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
     OpenMMLabMMDetBackend,
 )
+from slopecoach_ml.diagnosis import run_diagnosis_golden
 from slopecoach_ml.identity import load_target_ground_truth, prepare_target_gt_template
 from slopecoach_ml.models import load_model_registry
 from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
@@ -188,6 +190,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--fixture", default=str(_root() / "fixtures/golden_sport_calibration_001.json")
     )
     calibration_golden.add_argument("--output")
+    diagnosis_golden = subparsers.add_parser(
+        "diagnosis-golden", help="run deterministic A7 provisional diagnosis Golden"
+    )
+    diagnosis_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_diagnosis_001.json")
+    )
+    diagnosis_golden.add_argument("--output")
+    diagnosis_benchmark = subparsers.add_parser(
+        "benchmark-diagnosis", help="run artifact-only A7 diagnosis benchmark"
+    )
+    diagnosis_benchmark.add_argument("artifact")
+    diagnosis_benchmark.add_argument(
+        "--sport-type", choices=("auto", "ski", "snowboard"), default="auto"
+    )
+    diagnosis_benchmark.add_argument("--output")
     prepare_sport_gt = subparsers.add_parser(
         "prepare-sport-type-gt", help="create UNLABELED manual SportType GT templates"
     )
@@ -242,6 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     sport_type.add_argument("--visual-checkpoint")
     sport_type.add_argument("--visual-model-name", choices=("ViT-B/32",), default="ViT-B/32")
     sport_type.add_argument("--calibration-artifact")
+    sport_type.add_argument("--source-video-id")
     sport_type.add_argument("--output")
     sport_type.add_argument("--debug-dir")
     sport_type.add_argument("--max-debug-frames", type=int, default=12)
@@ -310,6 +328,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "prepare-sport-type-gt":
         _write_json(prepare_sport_type_gt(args.manifest, args.output_dir), None)
+        return 0
+    if args.command == "benchmark-diagnosis":
+        result = benchmark_diagnosis_artifact(args.artifact, sport_type=args.sport_type)
+        _write_json(result, args.output)
         return 0
     if args.command == "build-sport-calibration-dataset":
         result = build_calibration_dataset(args.artifacts, args.annotations_dir)
@@ -436,6 +458,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "sport-calibration-golden":
         result = run_calibration_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "diagnosis-golden":
+        result = run_diagnosis_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
@@ -716,6 +742,7 @@ def main(argv: list[str] | None = None) -> int:
                     if args.calibration_artifact
                     else None
                 )
+                runner_kwargs["source_video_id"] = args.source_video_id
             report = benchmark_runner(**runner_kwargs)
             report["debug_artifacts"] = (
                 (
