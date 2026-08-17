@@ -116,7 +116,7 @@ benchmark-temporal-turns:
 
 benchmark-biomechanics:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-biomechanics VIDEO=/path/to/video' >&2; exit 2)
-	$(UV) run --project python python -m slopecoach_ml.cli benchmark-biomechanics "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",)
+	$(UV) run --project python python -m slopecoach_ml.cli benchmark-biomechanics "$(VIDEO)" --sample-fps "$(or $(SAMPLE_FPS),5)" --input-non-mirrored $(if $(OUTPUT),--output "$(OUTPUT)",) $(if $(DEBUG_DIR),--debug-dir "$(DEBUG_DIR)",) $(if $(OVERLAY_VIDEO),--overlay-video "$(OVERLAY_VIDEO)",)
 
 benchmark-sport-type:
 	@test -n "$(VIDEO)" || (echo 'usage: make benchmark-sport-type VIDEO=/path/to/video' >&2; exit 2)

@@ -311,7 +311,27 @@ make biomechanics-golden
 make benchmark-biomechanics \
   VIDEO=benchmarks/ski_bench/videos/example.mp4 SAMPLE_FPS=5 \
   OUTPUT=artifacts/benchmarks/a5/example_5fps.json \
-  DEBUG_DIR=artifacts/debug/a5_biomechanics/example_5fps
+  DEBUG_DIR=artifacts/debug/a5_biomechanics/example_5fps \
+  OVERLAY_VIDEO=artifacts/local/pose_overlay.mp4
+```
+
+The optional `OVERLAY_VIDEO` / `--overlay-video` output is a
+`SAMPLED_DEBUG_VIDEO`: its frame rate is the requested benchmark `--sample-fps`, not the source
+video frame rate. It reuses the sampled JPEG frames and existing target, temporal, turn-proxy, and
+2D biomechanics evidence collected during the same benchmark run; it never rereads the video or
+reruns RTMDet/RTMW. Missing target poses, joints, turn segments, and feature facts stay visibly
+missing rather than being inferred. The overlay is a research/debug visualization only—not a
+physical edge-angle, carving, diagnosis, or production analysis output.
+It does not establish scientific accuracy or Ground Truth validation.
+
+Direct CLI equivalent:
+
+```bash
+python -m slopecoach_ml.cli benchmark-biomechanics "$VIDEO" \
+  --sample-fps 5 --input-non-mirrored \
+  --output artifacts/local/a5.json \
+  --debug-dir artifacts/local/a5_debug \
+  --overlay-video artifacts/local/pose_overlay.mp4
 ```
 
 ## A6.3 SportType calibration research

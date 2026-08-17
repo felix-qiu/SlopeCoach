@@ -2,7 +2,10 @@ from .analysis_result import (
     ANALYSIS_RESULT_BENCHMARK_VERSION,
     benchmark_analysis_result_artifact,
 )
-from .biomechanics_debug import write_biomechanics_debug_artifacts
+from .biomechanics_debug import (
+    write_biomechanics_debug_artifacts,
+    write_biomechanics_overlay_video,
+)
 from .biomechanics_features import benchmark_biomechanics_frames
 from .diagnosis import benchmark_diagnosis_artifact
 from .harness import benchmark_golden, benchmark_video
@@ -54,6 +57,7 @@ __all__ = [
     "benchmark_temporal_turns_frames",
     "write_temporal_debug_artifacts",
     "write_biomechanics_debug_artifacts",
+    "write_biomechanics_overlay_video",
     "write_sport_type_debug_artifacts",
     "SPORT_TYPE_BENCHMARK_CONTRACT_VERSION",
     "SportTypeBenchmarkCollector",

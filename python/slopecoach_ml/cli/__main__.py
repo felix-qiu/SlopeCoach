@@ -28,6 +28,7 @@ from slopecoach_ml.benchmark import (
     load_real_dataset_manifest,
     prepare_real_dataset_manifest,
     write_biomechanics_debug_artifacts,
+    write_biomechanics_overlay_video,
     write_ground_truth_comparison,
     write_sport_type_debug_artifacts,
     write_temporal_debug_artifacts,
@@ -286,6 +287,9 @@ def build_parser() -> argparse.ArgumentParser:
     biomechanics.add_argument("--sample-fps", type=float, default=5.0)
     biomechanics.add_argument("--output")
     biomechanics.add_argument("--debug-dir")
+    biomechanics.add_argument(
+        "--overlay-video", help="write a sampled pose/biomechanics debug MP4 without model reruns"
+    )
     biomechanics.add_argument("--max-debug-frames", type=int, default=12)
     biomechanics.add_argument("--input-non-mirrored", action="store_true")
     sport_type = subparsers.add_parser(
@@ -364,6 +368,19 @@ def _real_providers():
             "pose_seconds": pose_load_seconds,
         },
     )
+
+
+def _keep_temporal_images(args: argparse.Namespace) -> bool:
+    return bool(args.debug_dir or getattr(args, "overlay_video", None))
+
+
+def _temporal_collector(args: argparse.Namespace):
+    collector_type = (
+        SportTypeBenchmarkCollector
+        if args.command == "benchmark-sport-type"
+        else TemporalTurnCollector
+    )
+    return collector_type(keep_images=_keep_temporal_images(args))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -747,11 +764,7 @@ def main(argv: list[str] | None = None) -> int:
             "benchmark-biomechanics",
             "benchmark-sport-type",
         }:
-            collector = (
-                SportTypeBenchmarkCollector(keep_images=bool(args.debug_dir))
-                if args.command == "benchmark-sport-type"
-                else TemporalTurnCollector(keep_images=bool(args.debug_dir))
-            )
+            collector = _temporal_collector(args)
             identity_template = (
                 _root()
                 / "benchmarks/ski_bench/annotations"
@@ -828,6 +841,13 @@ def main(argv: list[str] | None = None) -> int:
                     "turn_events": None,
                 }
             )
+            if args.command == "benchmark-biomechanics" and args.overlay_video:
+                report["debug_artifacts"]["overlay_video"] = write_biomechanics_overlay_video(
+                    args.overlay_video,
+                    report,
+                    collector,
+                    fps=args.sample_fps,
+                )
             report.pop("_upstream_biomechanics_report", None)
             report.pop("_equipment_debug_frames", None)
             report.pop("_visual_debug_frames", None)
