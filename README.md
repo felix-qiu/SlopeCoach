@@ -1,6 +1,6 @@
 # SlopeCoach
 
-SlopeCoach is currently in **Phase A7: Evidence-backed Diagnosis Research Foundation**. The code in
+SlopeCoach is currently in **Phase A8: Scorecard and Controlled Coaching Research Foundation**. The code in
 `python/` supports algorithm research, deterministic golden fixtures, validation, and
 benchmarks. It is not a production mobile application and does not replace the product
 architecture.
@@ -39,6 +39,8 @@ python/slopecoach_ml/       Research/reference package
   sport_type/               Auto-first sport contracts, fusion, providers, cues and routing gate
     calibration/            Manual GT, source aggregation, Platt calibration and diagnostic LLR fusion
   diagnosis/                Turn-window, multi-frame provisional research rule engine
+  scoring/                  Structure-only nullable scorecard and diagnosis-dimension mapping
+  coach/                    Top-two issues, controlled drills and deterministic zh-CN templates
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -105,6 +107,9 @@ uv run --project python python -m slopecoach_ml.cli benchmark /path/to/video.mp4
 uv run --project python python -m slopecoach_ml.cli temporal-golden
 uv run --project python python -m slopecoach_ml.cli turn-golden
 uv run --project python python -m slopecoach_ml.cli sport-type-golden
+uv run --project python python -m slopecoach_ml.cli scorecard-golden
+uv run --project python python -m slopecoach_ml.cli coach-golden
+uv run --project python python -m slopecoach_ml.cli benchmark-scoring-coach /path/to/a7.json
 uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
   --visual-checkpoint artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
@@ -337,9 +342,51 @@ make benchmark-diagnosis \
 The artifact benchmark is model-free and refuses inputs lacking persisted turn and biomechanics
 facts. Diagnosis severity and confidence are JSON `null`; neither coverage nor threshold margin is
 renamed as confidence. Diagnosis GT and Turn GT are unavailable, so precision, recall, F1, and
-agreement remain null. There is no physical COM, pressure, edge angle, scoring, drills, coaching
+agreement remain null. `DIAGNOSIS_SEVERITY_STATUS` is the canonical status field;
+`SEVERITY_STATUS` remains a deprecated matching alias for A7 artifact compatibility. There is no
+physical COM, pressure, edge angle, calibrated scoring, validated drills, free-form coaching
 text, XGBoost, or real diagnosis-accuracy claim. Python remains research/reference only; the
 production Rust/mobile implementation is deferred.
+
+## A8 structure-only scorecard and controlled coach
+
+A8 stabilizes the research/reference path `DiagnosisResult -> ScoreCard -> Top 1–2 Issues ->
+CoachContext -> Controlled Drill Library -> deterministic zh-CN Template Coach -> CoachReport`.
+It does not read pose, pixels, frame facts, or raw biomechanics after DiagnosisResult exists and
+never recalculates the A7 thresholds. This is a downstream reference bridge for future Rust/mobile
+parity—not a production Domain Kernel.
+
+The scorecard has exactly `BALANCE`, `EDGE_CONTROL`, `STANCE`, `SYMMETRY`, and `TIMING` dimensions.
+The three current rules map only to Stance, Symmetry, and Timing. Balance and Edge Control remain
+`NOT_IMPLEMENTED`; evidence is not copied across dimensions. Every dimension `score_value`, scale,
+and the overall score are deliberately JSON `null`, with numeric scoring disabled. Diagnosis GT,
+Turn GT, and Score GT do not exist, so numeric calibration is deferred. A recurrence ratio is only
+an observed diagnostic statistic: it is not severity, confidence, probability, or a score.
+
+`NO_PROVISIONAL_ISSUE_DETECTED` means only that currently implemented, evaluable research rules did
+not trigger. It is not `GOOD_FORM`, a skill level, or proof that technique is correct. Missing
+evidence remains `NOT_EVALUABLE`. Top issues use deterministic evidence recurrence (ratio, count,
+then A7 registry order), never threshold distance. Severity and confidence remain null.
+
+The controlled library contains exactly three low-risk research practice focuses for the three A7
+signals. The deterministic `zh-CN` template coach makes provisional 2D evidence and safety limits
+explicit; it does not claim that a drill fixes an error. Drill effectiveness and coach preference
+have not been validated. There is no LLM, network call, XGBoost, physical COM, physical pressure,
+physical edge angle, 3D inference, personalization, or skill classification.
+
+```bash
+make scorecard-golden
+make coach-golden
+make benchmark-scoring-coach \
+  ARTIFACT=artifacts/benchmarks/a7/example.json \
+  OUTPUT=artifacts/benchmarks/a8/example.json
+```
+
+The A8 benchmark is artifact-only and accepts a compatible `ski-bench-diagnosis-v1` artifact. It
+does not rerun video or any model and refuses to reconstruct diagnosis from upstream biomechanics.
+Ground-truth score metrics remain null. A future LLM may only rephrase, translate, or summarize a
+controlled CoachContext; it may not create diagnosis, change scores or priority facts, or invent
+evidence. Mobile integration and the production Rust implementation remain deferred.
 
 ## Real ski-video benchmark and artifacts
 
@@ -661,8 +708,9 @@ claimed READY. Per-frame observations are not Track IDs, multi-person frames nev
 target, raw temporal metrics apply no smoothing, and `left_knee_angle_2d_degrees` is image-plane
 evidence only—not physical 3D flexion or diagnosis.
 
-Not implemented in Phase A6.3: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
-the production Rust Domain Kernel, ByteTrack/deep ReID, identity or turn GT labeling, diagnosis,
-scoring, drills, validated production SportType models, labeled SportType GT, 3D/physical edge angle,
-LLM/VLM coaching, QNN, TensorRT, live camera coaching, complex UI, or first-party C++. Mobile
-integration and the Rust production implementation remain explicitly deferred.
+Not implemented in Phase A8: iOS/Android apps, Swift/Kotlin, UniFFI, Rust mobile integration,
+the production Rust Domain Kernel, validated numeric scores or overall score, severity/confidence
+calibration, skill classification, diagnosis/turn/score GT, validated production SportType models,
+3D or physical edge-angle/COM/pressure measurement, LLM/VLM coaching, XGBoost, QNN, TensorRT,
+live camera coaching, complex UI, or first-party C++. Mobile integration and the Rust production
+implementation remain explicitly deferred.

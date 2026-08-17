@@ -57,6 +57,16 @@ def benchmark_diagnosis_artifact(
             }
         )
     turns = artifact["turn_segments"]
+    qualified = [item for item in turns if item.get("status") in {"VALID", "PARTIAL"}]
+    valid = sum(item.get("status") == "VALID" for item in turns)
+    partial = sum(item.get("status") == "PARTIAL" for item in turns)
+    rejected = len(turns) - len(qualified)
+    rejection_reason_counts: dict[str, int] = {}
+    for turn in turns:
+        if turn.get("status") in {"VALID", "PARTIAL"}:
+            continue
+        reason = str(turn.get("reason") or turn.get("status") or "UNKNOWN_REJECTION_REASON")
+        rejection_reason_counts[reason] = rejection_reason_counts.get(reason, 0) + 1
     complete = sum(
         item.get("status") == "VALID"
         and item.get("start_timestamp_us") is not None
@@ -67,14 +77,17 @@ def benchmark_diagnosis_artifact(
         "benchmark_contract_version": DIAGNOSIS_BENCHMARK_CONTRACT_VERSION,
         "input_kind": "EXISTING_BIOMECHANICS_ARTIFACT",
         "sport_input": sport,
-        "qualified_turn_count": len(turns),
+        "turn_candidate_count": len(turns),
+        "qualified_turn_count": len(qualified),
+        "valid_turn_count": valid,
+        "partial_turn_count": partial,
+        "rejected_turn_count": rejected,
+        "rejection_reason_counts": dict(sorted(rejection_reason_counts.items())),
         "complete_diagnosis_eligible_turn_count": complete,
         "partial_or_noneligible_turn_count": len(turns) - complete,
         "per_rule": per_rule,
         "total_provisional_diagnoses": len(result["diagnoses"]),
-        "blocker_counts": {
-            reason: result["blockers"].count(reason) for reason in sorted(set(result["blockers"]))
-        },
+        "blocker_counts": _blocker_counts(evaluations),
         "diagnosis_rule_registry_sha256": DIAGNOSIS_RULE_REGISTRY_SHA256,
         "diagnosis_config": DiagnosisRuleConfig().to_dict(),
         "diagnosis_result": result,
@@ -92,3 +105,12 @@ def benchmark_diagnosis_artifact(
             "A7_PRODUCT_VALIDATION": "BLOCKED_BY_TURN_AND_DIAGNOSIS_GT",
         },
     }
+
+
+def _blocker_counts(evaluations: list[dict[str, object]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for evaluation in evaluations:
+        for reason in evaluation.get("reason_codes", []):
+            key = str(reason)
+            counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))

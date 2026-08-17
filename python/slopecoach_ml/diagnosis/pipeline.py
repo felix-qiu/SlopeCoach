@@ -75,9 +75,16 @@ def diagnose_biomechanics(
         for definition in RULE_REGISTRY:
             code = definition.diagnosis_code.value
             if sport not in definition.applicable_sport_types:
-                evaluation = _not_evaluable(code, turn, "SPORT_TYPE_RULE_NOT_APPLICABLE")
+                evaluation = _not_evaluable(
+                    code,
+                    turn,
+                    "SPORT_TYPE_RULE_NOT_APPLICABLE",
+                    phase=definition.phase.value,
+                )
             elif complete_reason:
-                evaluation = _not_evaluable(code, turn, complete_reason)
+                evaluation = _not_evaluable(
+                    code, turn, complete_reason, phase=definition.phase.value
+                )
             else:
                 evaluation = _evaluate_rule(
                     definition,
@@ -148,9 +155,21 @@ def _evaluate_rule(definition, turn, frame_facts, turn_result, config):
         turn=turn, frame_facts=frame_facts, feature_id=primary_feature
     )
     if evidence["sample_count"] < config.minimum_turn_feature_samples:
-        return _not_evaluable(code, turn, "INSUFFICIENT_FEATURE_SAMPLES", evidence)
+        return _not_evaluable(
+            code,
+            turn,
+            "INSUFFICIENT_FEATURE_SAMPLES",
+            evidence,
+            phase=definition.phase.value,
+        )
     if evidence["coverage"] < config.minimum_turn_feature_coverage:
-        return _not_evaluable(code, turn, "INSUFFICIENT_FEATURE_COVERAGE", evidence)
+        return _not_evaluable(
+            code,
+            turn,
+            "INSUFFICIENT_FEATURE_COVERAGE",
+            evidence,
+            phase=definition.phase.value,
+        )
     values = [float(item["value"]) for item in evidence["facts"]]
     if code == "LIMITED_KNEE_FLEXION_MODULATION_2D":
         value = max(values) - min(values)
@@ -167,7 +186,13 @@ def _evaluate_rule(definition, turn, frame_facts, turn_result, config):
     else:
         fact = _turn_fact(turn_result, "minimum_mean_knee_angle_phase_offset")
         if fact is None or fact.get("status") != "AVAILABLE" or fact.get("value") is None:
-            return _not_evaluable(code, turn, "TURN_FEATURE_UNAVAILABLE", evidence)
+            return _not_evaluable(
+                code,
+                turn,
+                "TURN_FEATURE_UNAVAILABLE",
+                evidence,
+                phase=definition.phase.value,
+            )
         value = abs(float(fact["value"]))
         statistic, operator = "absolute_value", ">"
         threshold = config.knee_flexion_phase_offset_abs
@@ -225,14 +250,14 @@ def _feature_evidence(feature_id, unit, statistic, value, operator, threshold, e
     }
 
 
-def _not_evaluable(code, turn, reason, evidence=None):
+def _not_evaluable(code, turn, reason, evidence=None, *, phase):
     return {
         "diagnosis_code": code,
         "turn_id": turn["turn_id"],
         "turn_apex_timestamp_us": turn["apex_timestamp_us"],
         "status": "NOT_EVALUABLE",
         "triggered": False,
-        "phase": "FULL_TURN",
+        "phase": phase,
         "reason_codes": [reason],
         "evidence_frames": (evidence or {}).get("evidence_timestamps_us", []),
         "feature_evidence": [],

@@ -104,6 +104,8 @@ class DiagnosisResult:
             "blockers": list(self.blockers),
             "config": self.config.to_dict(),
             "DIAGNOSIS_CONFIDENCE_STATUS": "NOT_CALIBRATED",
+            "DIAGNOSIS_SEVERITY_STATUS": "NOT_CALIBRATED",
+            # Deprecated A7 compatibility alias. New consumers use the canonical key above.
             "SEVERITY_STATUS": "NOT_CALIBRATED",
             "DIAGNOSIS_ML_FEATURE_VECTOR_STATUS": "NOT_FROZEN",
             "limitations": list(self.limitations),

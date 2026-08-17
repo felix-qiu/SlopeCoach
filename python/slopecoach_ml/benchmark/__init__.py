@@ -15,6 +15,10 @@ from .real_pose import (
     benchmark_real_pose_frames,
     select_debug_frame_indices,
 )
+from .scoring_coach import (
+    SCORING_COACH_BENCHMARK_VERSION,
+    benchmark_scoring_coach_artifact,
+)
 from .sport_type import SPORT_TYPE_BENCHMARK_CONTRACT_VERSION, benchmark_sport_type_frames
 from .sport_type_collector import SportTypeBenchmarkCollector
 from .sport_type_debug import write_sport_type_debug_artifacts
@@ -38,6 +42,7 @@ __all__ = [
     "benchmark_biomechanics_frames",
     "benchmark_diagnosis_artifact",
     "benchmark_real_pose_frames",
+    "benchmark_scoring_coach_artifact",
     "benchmark_target_identity_frames",
     "benchmark_sport_type_frames",
     "benchmark_temporal_turns_frames",
@@ -53,4 +58,5 @@ __all__ = [
     "load_real_dataset_manifest",
     "prepare_real_dataset_manifest",
     "select_debug_frame_indices",
+    "SCORING_COACH_BENCHMARK_VERSION",
 ]

@@ -1,0 +1,36 @@
+{
+  "contract_version": "golden-coach-v1",
+  "cases": [
+    {
+      "case_id": "A-no-trigger",
+      "rule_statuses": {"LIMITED_KNEE_FLEXION_MODULATION_2D": ["NOT_TRIGGERED"], "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED"], "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED"]},
+      "expected": {"status": "EXECUTED_NO_PROVISIONAL_ISSUES", "top_issue_codes": [], "drill_ids": []}
+    },
+    {
+      "case_id": "B-one-trigger",
+      "rule_statuses": {"LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED"], "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED"], "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED"]},
+      "expected": {"status": "EXECUTED_WITH_PROVISIONAL_ISSUES", "top_issue_codes": ["LIMITED_KNEE_FLEXION_MODULATION_2D"], "drill_ids": ["FLEXION_RANGE_AWARENESS_TURNS"]}
+    },
+    {
+      "case_id": "C-three-equal",
+      "rule_statuses": {"LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED"], "BILATERAL_KNEE_ASYMMETRY_2D": ["TRIGGERED"], "KNEE_FLEXION_TIMING_OFFSET_2D": ["TRIGGERED"]},
+      "expected": {"status": "EXECUTED_WITH_PROVISIONAL_ISSUES", "top_issue_codes": ["LIMITED_KNEE_FLEXION_MODULATION_2D", "BILATERAL_KNEE_ASYMMETRY_2D"], "drill_ids": ["FLEXION_RANGE_AWARENESS_TURNS", "LEFT_RIGHT_KNEE_SYMMETRY_AWARENESS"]}
+    },
+    {
+      "case_id": "D-recurrence-priority",
+      "rule_statuses": {"LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"], "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"], "KNEE_FLEXION_TIMING_OFFSET_2D": ["TRIGGERED", "TRIGGERED", "TRIGGERED"]},
+      "expected": {"status": "EXECUTED_WITH_PROVISIONAL_ISSUES", "top_issue_codes": ["KNEE_FLEXION_TIMING_OFFSET_2D", "LIMITED_KNEE_FLEXION_MODULATION_2D"], "drill_ids": ["TURN_RHYTHM_FLEXION_TIMING_AWARENESS", "FLEXION_RANGE_AWARENESS_TURNS"]}
+    },
+    {
+      "case_id": "E-upstream-not-analyzable",
+      "upstream_status": "NOT_ANALYZABLE_NO_QUALIFIED_TURNS",
+      "rule_statuses": {},
+      "expected": {"status": "NOT_ANALYZABLE_UPSTREAM", "top_issue_codes": [], "drill_ids": []}
+    },
+    {
+      "case_id": "F-three-turn-end-to-end",
+      "rule_statuses": {"LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED", "TRIGGERED", "NOT_TRIGGERED"], "BILATERAL_KNEE_ASYMMETRY_2D": ["TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"], "KNEE_FLEXION_TIMING_OFFSET_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"]},
+      "expected": {"status": "EXECUTED_WITH_PROVISIONAL_ISSUES", "top_issue_codes": ["LIMITED_KNEE_FLEXION_MODULATION_2D", "BILATERAL_KNEE_ASYMMETRY_2D"], "drill_ids": ["FLEXION_RANGE_AWARENESS_TURNS", "LEFT_RIGHT_KNEE_SYMMETRY_AWARENESS"]}
+    }
+  ]
+}

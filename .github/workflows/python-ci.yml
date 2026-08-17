@@ -42,3 +42,11 @@ jobs:
         run: uv run --project python python -m slopecoach_ml.cli biomechanics-golden
       - name: SportType Golden
         run: uv run --project python python -m slopecoach_ml.cli sport-type-golden
+      - name: Sport evidence calibration Golden
+        run: uv run --project python python -m slopecoach_ml.cli sport-calibration-golden
+      - name: Diagnosis Golden
+        run: uv run --project python python -m slopecoach_ml.cli diagnosis-golden
+      - name: Scorecard Golden
+        run: uv run --project python python -m slopecoach_ml.cli scorecard-golden
+      - name: Controlled coach Golden
+        run: uv run --project python python -m slopecoach_ml.cli coach-golden

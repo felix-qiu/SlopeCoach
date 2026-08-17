@@ -17,6 +17,7 @@ from slopecoach_ml.benchmark import (
     benchmark_diagnosis_artifact,
     benchmark_golden,
     benchmark_real_pose_frames,
+    benchmark_scoring_coach_artifact,
     benchmark_sport_type_frames,
     benchmark_target_identity_frames,
     benchmark_temporal_turns_frames,
@@ -30,6 +31,7 @@ from slopecoach_ml.benchmark import (
     write_temporal_debug_artifacts,
 )
 from slopecoach_ml.biomechanics.golden import run_biomechanics_golden
+from slopecoach_ml.coach import run_coach_golden
 from slopecoach_ml.detection.mmdet_provider import (
     MMDetPersonDetectorProvider,
     OpenMMLabMMDetBackend,
@@ -47,6 +49,7 @@ from slopecoach_ml.reference import (
     analyze_pose_frame,
     load_golden_fixture,
 )
+from slopecoach_ml.scoring import run_scorecard_golden
 from slopecoach_ml.sport_type import (
     ClipVisualSportEvidenceProvider,
     FailedSportEvidenceProvider,
@@ -205,6 +208,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--sport-type", choices=("auto", "ski", "snowboard"), default="auto"
     )
     diagnosis_benchmark.add_argument("--output")
+    scorecard_golden = subparsers.add_parser(
+        "scorecard-golden", help="run deterministic A8 structure-only ScoreCard Golden"
+    )
+    scorecard_golden.add_argument(
+        "--fixture", default=str(_root() / "fixtures/golden_scorecard_001.json")
+    )
+    scorecard_golden.add_argument("--output")
+    coach_golden = subparsers.add_parser(
+        "coach-golden", help="run deterministic A8 controlled zh-CN coach Golden"
+    )
+    coach_golden.add_argument("--fixture", default=str(_root() / "fixtures/golden_coach_001.json"))
+    coach_golden.add_argument("--output")
+    scoring_coach = subparsers.add_parser(
+        "benchmark-scoring-coach", help="run artifact-only A8 scorecard/coach benchmark"
+    )
+    scoring_coach.add_argument("artifact")
+    scoring_coach.add_argument("--output")
     prepare_sport_gt = subparsers.add_parser(
         "prepare-sport-type-gt", help="create UNLABELED manual SportType GT templates"
     )
@@ -331,6 +351,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "benchmark-diagnosis":
         result = benchmark_diagnosis_artifact(args.artifact, sport_type=args.sport_type)
+        _write_json(result, args.output)
+        return 0
+    if args.command == "benchmark-scoring-coach":
+        result = benchmark_scoring_coach_artifact(args.artifact)
         _write_json(result, args.output)
         return 0
     if args.command == "build-sport-calibration-dataset":
@@ -462,6 +486,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["golden_passed"] else 1
     if args.command == "diagnosis-golden":
         result = run_diagnosis_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "scorecard-golden":
+        result = run_scorecard_golden(args.fixture)
+        _write_json(result, args.output)
+        return 0 if result["golden_passed"] else 1
+    if args.command == "coach-golden":
+        result = run_coach_golden(args.fixture)
         _write_json(result, args.output)
         return 0 if result["golden_passed"] else 1
     if args.command == "prepare-target-gt":
