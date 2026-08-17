@@ -6,9 +6,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+from slopecoach_ml.pose import Joint
 from slopecoach_ml.pose.overlay import COCO17_EDGES
 
 from .temporal_debug import write_temporal_debug_artifacts
+
+_BODY_OVERLAY_JOINTS = frozenset(joint.value for edge in COCO17_EDGES for joint in edge) | {
+    Joint.NOSE.value
+}
 
 
 def write_biomechanics_debug_artifacts(output_dir, report, collector, *, max_frames=12):
@@ -181,7 +186,6 @@ def write_biomechanics_overlay_video(
                 canvas = cv2.resize(canvas, (width, height))
 
             raw = raw_samples.get((sample["timestamp_us"], frame_index))
-            _draw_target_bbox(cv2, canvas, raw)
             _draw_temporal_skeleton(cv2, canvas, sample.get("joints", {}))
             signal = signal_by_timestamp.get(sample["timestamp_us"])
             turn = _containing_turn(turns, sample["timestamp_us"])
@@ -207,42 +211,24 @@ def write_biomechanics_overlay_video(
     }
 
 
-def _draw_target_bbox(cv2: Any, canvas: Any, raw_sample: Any) -> None:
-    pose = getattr(raw_sample, "raw_target_pose", None)
-    if pose is None:
-        return
-    box = pose.bbox
-    cv2.rectangle(
-        canvas,
-        (round(box.x_px), round(box.y_px)),
-        (round(box.x_px + box.width_px), round(box.y_px + box.height_px)),
-        (0, 255, 0),
-        2,
-    )
-
-
 def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> None:
     for first, second in COCO17_EDGES:
         a, b = joints.get(first.value), joints.get(second.value)
         if not isinstance(a, dict) or not isinstance(b, dict):
             continue
-        raw_a = _point(a, "raw")
-        raw_b = _point(b, "raw")
-        if raw_a is not None and raw_b is not None:
-            cv2.line(canvas, raw_a, raw_b, (120, 120, 120), 1)
         stable_a = _point(a, "stabilized")
         stable_b = _point(b, "stabilized")
         if stable_a is None or stable_b is None:
             continue
-        interpolated = "INTERPOLATED" in (a.get("provenance"), b.get("provenance"))
-        color = (255, 0, 255) if interpolated else (0, 220, 255)
-        cv2.line(canvas, stable_a, stable_b, color, 3)
-    for point in joints.values():
+        cv2.line(canvas, stable_a, stable_b, (0, 255, 0), 2, cv2.LINE_AA)
+    for joint_name, point in joints.items():
+        if joint_name not in _BODY_OVERLAY_JOINTS:
+            continue
         stable = _point(point, "stabilized") if isinstance(point, dict) else None
         if stable is None:
             continue
-        color = (255, 0, 255) if point.get("provenance") == "INTERPOLATED" else (0, 220, 255)
-        cv2.circle(canvas, stable, 4, color, -1)
+        thickness = 2 if point.get("provenance") == "INTERPOLATED" else -1
+        cv2.circle(canvas, stable, 5, (0, 255, 255), thickness, cv2.LINE_AA)
 
 
 def _point(point: dict[str, Any], prefix: str):

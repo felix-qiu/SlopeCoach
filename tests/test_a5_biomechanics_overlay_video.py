@@ -38,10 +38,12 @@ class FakeWriter:
 class FakeCV2:
     IMREAD_COLOR = 1
     FONT_HERSHEY_SIMPLEX = 0
+    LINE_AA = 16
 
     def __init__(self, *, writer_opened=True):
         self.lines = []
         self.circles = []
+        self.rectangles = []
         self.writer = FakeWriter(opened=writer_opened)
 
     def imdecode(self, encoded, _mode):
@@ -56,14 +58,14 @@ class FakeCV2:
     def resize(self, canvas, dimensions):
         return FakeCanvas(canvas.marker, (dimensions[1], dimensions[0], 3))
 
-    def rectangle(self, *_args):
-        return None
+    def rectangle(self, *args):
+        self.rectangles.append(args)
 
-    def line(self, _canvas, start, end, color, thickness):
-        self.lines.append((start, end, color, thickness))
+    def line(self, _canvas, start, end, color, thickness, line_type=None):
+        self.lines.append((start, end, color, thickness, line_type))
 
-    def circle(self, _canvas, center, radius, color, thickness):
-        self.circles.append((center, radius, color, thickness))
+    def circle(self, _canvas, center, radius, color, thickness, line_type=None):
+        self.circles.append((center, radius, color, thickness, line_type))
 
     def putText(self, *_args):
         return None
@@ -164,9 +166,27 @@ def test_skeleton_provenance_skips_missing_coordinates_safely():
         "left_ankle": _joint("MISSING", raw=(5, 5), stabilized=(6, 6)),
     }
     _draw_temporal_skeleton(cv2, FakeCanvas(), joints)
-    assert len(cv2.lines) == 2  # one raw and one stabilized hip-to-knee edge
+    assert len(cv2.lines) == 1  # stabilized pose only; no raw-pose double line
     assert len(cv2.circles) == 2
-    assert cv2.lines[1][2] == (255, 0, 255)
+    assert cv2.lines[0][2:] == ((0, 255, 0), 2, cv2.LINE_AA)
+    assert cv2.circles == [
+        ((2, 2), 5, (0, 255, 255), -1, cv2.LINE_AA),
+        ((4, 4), 5, (0, 255, 255), 2, cv2.LINE_AA),
+    ]
+
+
+def test_overlay_hides_eye_and_ear_landmarks_but_keeps_one_head_point():
+    cv2 = FakeCV2()
+    joints = {
+        "nose": _joint("OBSERVED"),
+        "left_eye": _joint("OBSERVED"),
+        "right_eye": _joint("OBSERVED"),
+        "left_ear": _joint("OBSERVED"),
+        "right_ear": _joint("OBSERVED"),
+    }
+    _draw_temporal_skeleton(cv2, FakeCanvas(), joints)
+    assert len(cv2.circles) == 1
+    assert cv2.circles[0] == ((11, 21), 5, (0, 255, 255), -1, cv2.LINE_AA)
 
 
 def test_turn_label_only_uses_complete_existing_segment_containment():
@@ -212,6 +232,7 @@ def test_overlay_video_metadata_and_timestamp_order(monkeypatch, tmp_path):
         fps=5,
     )
     assert cv2.writer.frames == [b"first", b"second"]
+    assert cv2.rectangles == []
     assert metadata == {
         "path": str(tmp_path / "debug.mp4"),
         "kind": "SAMPLED_DEBUG_VIDEO",
