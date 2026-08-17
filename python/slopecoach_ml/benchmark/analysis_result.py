@@ -104,18 +104,60 @@ def _sport_summary(artifact):
 def _turn_summary(artifact):
     if "qualified_turn_count" not in artifact:
         return None
-    qualified = artifact.get("qualified_turn_count")
-    partial = artifact.get("partial_or_noneligible_turn_count")
+    count_fields = (
+        "turn_candidate_count",
+        "qualified_turn_count",
+        "valid_turn_count",
+        "partial_turn_count",
+        "rejected_turn_count",
+        "complete_diagnosis_eligible_turn_count",
+    )
+    counts = {name: artifact.get(name) for name in count_fields}
+    for value in counts.values():
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise ValueError("A9_TURN_SUMMARY_INCONSISTENT")
+    reasons_explicit = "rejection_reason_counts" in artifact
+    raw_reasons = artifact.get("rejection_reason_counts")
+    if reasons_explicit:
+        if not isinstance(raw_reasons, dict) or any(
+            not isinstance(key, str)
+            or not key
+            or isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+            for key, value in raw_reasons.items()
+        ):
+            raise ValueError("A9_TURN_SUMMARY_INCONSISTENT")
+        rejection_reasons = dict(raw_reasons)
+    else:
+        rejection_reasons = None
+    core_fields = count_fields[:5]
+    complete = all(counts[name] is not None for name in core_fields)
+    if complete and (
+        counts["turn_candidate_count"]
+        != counts["valid_turn_count"] + counts["partial_turn_count"] + counts["rejected_turn_count"]
+        or counts["qualified_turn_count"]
+        != counts["valid_turn_count"] + counts["partial_turn_count"]
+    ):
+        raise ValueError("A9_TURN_SUMMARY_INCONSISTENT")
+    if (
+        complete
+        and reasons_explicit
+        and sum(rejection_reasons.values()) != counts["rejected_turn_count"]
+    ):
+        raise ValueError("A9_TURN_SUMMARY_INCONSISTENT")
+    limitations = ["NO_TURN_GT"]
+    if not all(counts[name] is not None for name in count_fields) or not reasons_explicit:
+        limitations.append("LEGACY_ARTIFACT_INCOMPLETE_TURN_SUMMARY")
+    ground_truth = artifact.get("ground_truth")
+    turn_gt = (
+        ground_truth.get("TURN_SEGMENTATION_GT_STATUS") if isinstance(ground_truth, dict) else None
+    )
     return {
-        "turn_candidate_count": None,
-        "qualified_turn_count": qualified,
-        "valid_turn_count": None,
-        "partial_turn_count": partial,
-        "rejected_turn_count": None,
-        "complete_diagnosis_eligible_turn_count": artifact.get(
-            "complete_diagnosis_eligible_turn_count"
-        ),
-        "rejection_reason_counts": dict(artifact.get("blocker_counts", {})),
-        "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE",
-        "limitations": ["NO_TURN_GT", "LEGACY_ARTIFACT_COMPACT_TURN_SUMMARY"],
+        **counts,
+        "rejection_reason_counts": rejection_reasons,
+        "TURN_SEGMENTATION_GT_STATUS": turn_gt or "NOT_AVAILABLE",
+        "limitations": limitations,
     }

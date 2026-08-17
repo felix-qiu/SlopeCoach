@@ -7,7 +7,7 @@
       "target_identity": {"state": "LOCKED", "safe_for_analysis": true, "selection_mode": "AUTO", "coverage": 1.0, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": []},
       "sport_type": {"effective_sport_type": "SKI", "effective_source": "USER", "resolution_status": "USER_SELECTED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["SPORT_TYPE_USER_SELECTED_ROUTING_NOT_GT"]},
       "turns": {"turn_candidate_count": 3, "qualified_turn_count": 3, "valid_turn_count": 3, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 3, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
-      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 9, "turn_feature_count": 7, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
+      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 4, "turn_feature_count": 12, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
       "rule_statuses": {
         "LIMITED_KNEE_FLEXION_MODULATION_2D": ["TRIGGERED", "TRIGGERED", "NOT_TRIGGERED"],
         "BILATERAL_KNEE_ASYMMETRY_2D": ["TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],
@@ -21,7 +21,7 @@
       "target_identity": {"state": "LOCKED", "safe_for_analysis": true, "selection_mode": "AUTO", "coverage": 1.0, "TARGET_IDENTITY_GT_ANNOTATION_STATUS": "DEFERRED", "limitations": []},
       "sport_type": {"effective_sport_type": "SKI", "effective_source": "AUTO", "resolution_status": "AUTO_RESOLVED", "CALIBRATED_FUSION_CONTROLS_ROUTING": false, "limitations": ["AUTO_SPORT_TYPE_NOT_PRODUCT_VALIDATED"]},
       "turns": {"turn_candidate_count": 3, "qualified_turn_count": 3, "valid_turn_count": 3, "partial_turn_count": 0, "rejected_turn_count": 0, "complete_diagnosis_eligible_turn_count": 3, "rejection_reason_counts": {}, "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE", "limitations": ["NO_TURN_GT"]},
-      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 9, "turn_feature_count": 7, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
+      "biomechanics": {"feature_registry_count": 30, "feature_registry_sha256": "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048", "frame_feature_count": 14, "temporal_feature_count": 4, "turn_feature_count": 12, "frame_fact_count": 42, "turn_feature_group_count": 3, "limitations": ["IMAGE_SPACE_2D_ONLY"]},
       "rule_statuses": {
         "LIMITED_KNEE_FLEXION_MODULATION_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],
         "BILATERAL_KNEE_ASYMMETRY_2D": ["NOT_TRIGGERED", "NOT_TRIGGERED", "NOT_TRIGGERED"],

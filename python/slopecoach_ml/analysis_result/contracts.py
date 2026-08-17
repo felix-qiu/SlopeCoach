@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -60,6 +61,12 @@ class AnalysisSection:
                 raise ValueError("ANALYSIS_SECTION_PAYLOAD_SHA256_INVALID")
             object.__setattr__(self, "payload", snapshot)
             object.__setattr__(self, "payload_sha256", expected)
+            if (
+                self.status is AnalysisSectionStatus.PARTIAL
+                and not self.reason_codes
+                and not self.limitations
+            ):
+                raise ValueError("ANALYSIS_PARTIAL_SECTION_REQUIRES_CONTEXT")
         object.__setattr__(self, "provenance", semantic_snapshot(self.provenance))
 
     def to_dict(self) -> dict[str, object]:
@@ -166,6 +173,12 @@ class ProductReport:
             raise ValueError("PRODUCT_REPORT_PROJECTION_POLICY_INCOMPATIBLE")
         if self.numeric_scoring_enabled or self.overall_score is not None:
             raise ValueError("PRODUCT_REPORT_NUMERIC_SCORE_LEAKAGE")
+        if re.fullmatch(r"[0-9a-f]{64}", self.source_analysis_result_sha256) is None:
+            raise ValueError("PRODUCT_REPORT_SOURCE_ANALYSIS_SHA256_INVALID")
+        if self.scorecard is not None:
+            from slopecoach_ml.coach import validate_scorecard_payload
+
+            validate_scorecard_payload(self.scorecard)
         if len(self.top_issues) > 2 or len(self.practice_plan) > 2:
             raise ValueError("PRODUCT_REPORT_ISSUE_LIMIT_EXCEEDED")
         for name in ("availability", "sport", "scorecard", "evidence_summary"):

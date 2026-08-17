@@ -19,6 +19,7 @@ from .contracts import (
     AnalysisSection,
     AnalysisSectionStatus,
 )
+from .integrity import derive_quality_gate
 from .registry import ANALYSIS_SECTION_NAMES, ANALYSIS_SECTION_REGISTRY_SHA256
 
 GROUND_TRUTH_DEFAULTS = {
@@ -108,17 +109,6 @@ _COMPACT_FIELDS = {
     },
 }
 
-_PRIMARY_PRECEDENCE = (
-    "TARGET_IDENTITY_UNCERTAIN",
-    "INPUT_NOT_ANALYZABLE",
-    "SPORT_TYPE_UNKNOWN",
-    "NO_QUALIFIED_TURNS",
-    "INSUFFICIENT_DIAGNOSIS_EVIDENCE",
-    "SOURCE_IDENTITY_UNAVAILABLE",
-    "TARGET_IDENTITY_SUMMARY_UNAVAILABLE",
-    "DOWNSTREAM_SECTION_UNAVAILABLE",
-)
-
 
 def build_analysis_result(
     *,
@@ -155,9 +145,8 @@ def build_analysis_result(
     sections = tuple(
         _section(name, payloads[name], reasons[name]) for name in ANALYSIS_SECTION_NAMES
     )
-    blockers = _blockers(payloads)
-    quality = _quality(payloads, blockers)
-    primary = next((reason for reason in _PRIMARY_PRECEDENCE if reason in blockers), None)
+    quality_value, blockers, primary = derive_quality_gate(sections)
+    quality = AnalysisQualityGateStatus(quality_value)
     limitations = _merge_limitations(sections)
     warnings = tuple(dict.fromkeys((coach or {}).get("warnings", ())))
     provenance = _semantic_provenance(
@@ -213,53 +202,6 @@ def _section(name, payload, unavailable_reason):
         payload=payload,
         limitations=limitations,
     )
-
-
-def _blockers(payloads) -> tuple[str, ...]:
-    blockers = []
-    target = payloads["TARGET_IDENTITY"]
-    sport = payloads["SPORT_TYPE"]
-    turns = payloads["TURNS"]
-    diagnosis = payloads["DIAGNOSIS"]
-    if target is not None and target.get("safe_for_analysis") is False:
-        blockers.append("TARGET_IDENTITY_UNCERTAIN")
-    if sport is not None and sport.get("effective_sport_type") not in {"SKI", "SNOWBOARD"}:
-        blockers.append("SPORT_TYPE_UNKNOWN")
-    if turns is not None and turns.get("qualified_turn_count") == 0:
-        blockers.append("NO_QUALIFIED_TURNS")
-    if diagnosis is not None and diagnosis["diagnosis_result"].get("status") == (
-        "NOT_ANALYZABLE_INSUFFICIENT_DIAGNOSIS_EVIDENCE"
-    ):
-        blockers.append("INSUFFICIENT_DIAGNOSIS_EVIDENCE")
-    if payloads["SOURCE"] is None:
-        blockers.append("SOURCE_IDENTITY_UNAVAILABLE")
-    if target is None:
-        blockers.append("TARGET_IDENTITY_SUMMARY_UNAVAILABLE")
-    if any(payloads[name] is None for name in ("DIAGNOSIS", "SCORECARD", "COACH")):
-        blockers.append("DOWNSTREAM_SECTION_UNAVAILABLE")
-    return tuple(dict.fromkeys(blockers))
-
-
-def _quality(payloads, blockers):
-    if "TARGET_IDENTITY_UNCERTAIN" in blockers or "INPUT_NOT_ANALYZABLE" in blockers:
-        return AnalysisQualityGateStatus.NOT_ANALYZABLE
-    diagnosis = payloads["DIAGNOSIS"]
-    ready_diagnosis = diagnosis is not None and diagnosis["diagnosis_result"].get("status") in {
-        "EXECUTED_NO_PROVISIONAL_RULES_TRIGGERED",
-        "EXECUTED_WITH_PROVISIONAL_DIAGNOSES",
-    }
-    if (
-        payloads["SOURCE"] is not None
-        and payloads["TARGET_IDENTITY"] is not None
-        and payloads["TARGET_IDENTITY"].get("safe_for_analysis") is True
-        and payloads["SPORT_TYPE"] is not None
-        and payloads["SPORT_TYPE"].get("effective_sport_type") in {"SKI", "SNOWBOARD"}
-        and ready_diagnosis
-        and payloads["SCORECARD"] is not None
-        and payloads["COACH"] is not None
-    ):
-        return AnalysisQualityGateStatus.READY
-    return AnalysisQualityGateStatus.PARTIAL_ANALYSIS
 
 
 def _merge_limitations(sections):

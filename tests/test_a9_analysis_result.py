@@ -13,6 +13,7 @@ from slopecoach_ml.analysis_result import (
     ANALYSIS_SECTION_NAMES,
     ANALYSIS_SECTION_REGISTRY_SHA256,
     PRODUCT_REPORT_CONTRACT_VERSION,
+    AnalysisQualityGateStatus,
     AnalysisSection,
     AnalysisSectionStatus,
     build_analysis_result,
@@ -23,6 +24,14 @@ from slopecoach_ml.analysis_result import (
 from slopecoach_ml.analysis_result.fingerprint import semantic_sha256
 from slopecoach_ml.analysis_result import projection
 from slopecoach_ml.benchmark import benchmark_analysis_result_artifact
+from slopecoach_ml.benchmark.analysis_result import _turn_summary
+from slopecoach_ml.biomechanics import (
+    FEATURE_REGISTRY_SHA256,
+    FEATURE_REGISTRY_V1,
+    FRAME_FEATURE_REGISTRY_V1,
+    TEMPORAL_FEATURE_REGISTRY_V1,
+    TURN_FEATURE_REGISTRY_V1,
+)
 from slopecoach_ml.coach import build_coach_report
 from slopecoach_ml.diagnosis import (
     DIAGNOSIS_RULE_REGISTRY_SHA256,
@@ -80,6 +89,34 @@ def _build(values):
     )
 
 
+def _a7_artifact(case_id="partial-no-turn"):
+    _, diagnosis, provenance, _, _ = _inputs(case_id)
+    return {
+        "benchmark_contract_version": "ski-bench-diagnosis-v1",
+        "diagnosis_rule_registry_sha256": DIAGNOSIS_RULE_REGISTRY_SHA256,
+        "diagnosis_config": copy.deepcopy(diagnosis["config"]),
+        "diagnosis_semantics_provenance": copy.deepcopy(provenance),
+        "diagnosis_result": copy.deepcopy(diagnosis),
+        "sport_input": {
+            "effective_sport_type": diagnosis["sport_type"],
+            "effective_source": diagnosis["sport_type_source"],
+        },
+        "turn_candidate_count": 0,
+        "qualified_turn_count": 0,
+        "valid_turn_count": 0,
+        "partial_turn_count": 0,
+        "rejected_turn_count": 0,
+        "rejection_reason_counts": {},
+        "complete_diagnosis_eligible_turn_count": 0,
+        "partial_or_noneligible_turn_count": 0,
+        "blocker_counts": {},
+        "ground_truth": {
+            "DIAGNOSIS_GT_STATUS": "NOT_AVAILABLE",
+            "TURN_SEGMENTATION_GT_STATUS": "NOT_AVAILABLE",
+        },
+    }
+
+
 def test_contract_versions_registry_and_golden_cases():
     report = run_analysis_result_golden(FIXTURE)
     assert report["golden_passed"]
@@ -96,6 +133,22 @@ def test_contract_versions_registry_and_golden_cases():
         "COACH",
     )
     assert len(ANALYSIS_SECTION_REGISTRY_SHA256) == 64
+
+
+def test_golden_biomechanics_counts_match_actual_registry():
+    assert len(FRAME_FEATURE_REGISTRY_V1) == 14
+    assert len(TEMPORAL_FEATURE_REGISTRY_V1) == 4
+    assert len(TURN_FEATURE_REGISTRY_V1) == 12
+    assert len(FEATURE_REGISTRY_V1) == 30
+    for case in json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]:
+        summary = case.get("biomechanics")
+        if summary is None:
+            continue
+        assert summary["feature_registry_count"] == len(FEATURE_REGISTRY_V1)
+        assert summary["frame_feature_count"] == len(FRAME_FEATURE_REGISTRY_V1)
+        assert summary["temporal_feature_count"] == len(TEMPORAL_FEATURE_REGISTRY_V1)
+        assert summary["turn_feature_count"] == len(TURN_FEATURE_REGISTRY_V1)
+        assert summary["feature_registry_sha256"] == FEATURE_REGISTRY_SHA256
 
 
 def test_raw_dict_config_and_registry_provenance_fail_closed():
@@ -162,6 +215,21 @@ def test_section_shape_and_payload_sha_tamper_rejected():
             {"source_video_id": "x"},
             "0" * 64,
         )
+    with pytest.raises(ValueError, match="PARTIAL_SECTION_REQUIRES_CONTEXT"):
+        AnalysisSection(
+            "SOURCE",
+            AnalysisSectionStatus.PARTIAL,
+            "source-v1",
+            {"source_video_id": "x"},
+        )
+    partial_section = AnalysisSection(
+        "SOURCE",
+        AnalysisSectionStatus.PARTIAL,
+        "source-v1",
+        {"source_video_id": "x"},
+        limitations=("SOURCE_METADATA_PARTIAL",),
+    )
+    assert partial_section.payload_sha256 is not None
     result = _build(_inputs())
     with pytest.raises(ValueError, match="REGISTRY_SHAPE_INVALID"):
         replace(result, sections=result.sections[:-1], analysis_result_sha256=None)
@@ -287,6 +355,59 @@ def test_unsafe_target_suppresses_product_recommendations():
     assert product.practice_plan == ()
 
 
+def test_analysis_result_quality_gate_and_primary_reason_are_canonical():
+    ready = _build(_inputs())
+    for blocker in ("NO_QUALIFIED_TURNS", "SOURCE_IDENTITY_UNAVAILABLE"):
+        with pytest.raises(
+            ValueError, match="ANALYSIS_QUALITY_GATE_CONTRACT_INCONSISTENT"
+        ):
+            replace(
+                ready,
+                blockers=(blocker,),
+                primary_reason_code=blocker,
+                analysis_result_sha256=None,
+            )
+    with pytest.raises(ValueError, match="ANALYSIS_QUALITY_GATE_CONTRACT_INCONSISTENT"):
+        replace(
+            ready,
+            quality_gate_status=AnalysisQualityGateStatus.NOT_ANALYZABLE,
+            analysis_result_sha256=None,
+        )
+    partial = _build(_inputs("partial-no-turn"))
+    with pytest.raises(ValueError, match="ANALYSIS_QUALITY_GATE_CONTRACT_INCONSISTENT"):
+        replace(
+            partial,
+            primary_reason_code="SOURCE_IDENTITY_UNAVAILABLE",
+            analysis_result_sha256=None,
+        )
+    assert (
+        _build(_inputs("not-analyzable-target")).quality_gate_status.value
+        == "NOT_ANALYZABLE"
+    )
+    assert _build(_inputs("legacy-metadata-partial")).quality_gate_status.value == (
+        "PARTIAL_ANALYSIS"
+    )
+
+
+def test_product_report_revalidates_embedded_scorecard():
+    product = build_product_report(_build(_inputs()))
+    with pytest.raises(ValueError, match="SOURCE_ANALYSIS_SHA256_INVALID"):
+        replace(
+            product, source_analysis_result_sha256="invalid", product_report_sha256=None
+        )
+    numeric = copy.deepcopy(product.scorecard)
+    numeric["numeric_scoring_enabled"] = True
+    with pytest.raises(ValueError, match="numeric score leakage"):
+        replace(product, scorecard=numeric, product_report_sha256=None)
+    provenance = copy.deepcopy(product.scorecard)
+    provenance["diagnosis_semantics_sha256"] = "0" * 64
+    provenance["diagnosis_semantics_provenance"]["diagnosis_semantics_sha256"] = (
+        "0" * 64
+    )
+    with pytest.raises(ValueError, match="DIAGNOSIS_SEMANTICS_SHA256_INVALID"):
+        replace(product, scorecard=provenance, product_report_sha256=None)
+
+
 def test_runtime_and_local_path_are_outside_semantic_fingerprints():
     result = _build(_inputs())
     product = build_product_report(result)
@@ -304,8 +425,9 @@ def test_runtime_and_local_path_are_outside_semantic_fingerprints():
     assert missing_source.quality_gate_status.value == "PARTIAL_ANALYSIS"
 
 
-def test_real_artifact_benchmark_is_partial_without_model_rerun():
-    path = ROOT / "artifacts/benchmarks/a7/ski_test_001_artifact_only.json"
+def test_synthetic_a7_artifact_benchmark_is_partial_without_model_rerun(tmp_path):
+    path = tmp_path / "a7_no_turn.json"
+    path.write_text(json.dumps(_a7_artifact(), allow_nan=False), encoding="utf-8")
     report = benchmark_analysis_result_artifact(path)
     repeated = benchmark_analysis_result_artifact(path)
     assert report["REAL_A9_MODEL_RERUN"] is False
@@ -317,7 +439,85 @@ def test_real_artifact_benchmark_is_partial_without_model_rerun():
     assert report["product_report"]["overall_score"] is None
     assert report["analysis_result_sha256"] == repeated["analysis_result_sha256"]
     assert report["product_report_sha256"] == repeated["product_report_sha256"]
-    assert report["performance"] != repeated["performance"]
+    assert set(report["performance"]) == set(repeated["performance"])
     assert report["fingerprints"]["diagnosis_rule_registry_sha256"] == (
         DIAGNOSIS_RULE_REGISTRY_SHA256
     )
+
+
+def test_turn_adapter_preserves_explicit_a7_truth(tmp_path):
+    artifact = _a7_artifact("ready-no-triggers")
+    artifact.update(
+        turn_candidate_count=7,
+        qualified_turn_count=3,
+        valid_turn_count=2,
+        partial_turn_count=1,
+        rejected_turn_count=4,
+        rejection_reason_counts={
+            "REJECTED_SHORT": 2,
+            "REJECTED_LOW_COVERAGE": 2,
+        },
+        complete_diagnosis_eligible_turn_count=2,
+        partial_or_noneligible_turn_count=5,
+        blocker_counts={"INSUFFICIENT_FEATURE_SAMPLES": 12},
+    )
+    summary = _turn_summary(artifact)
+    assert summary["turn_candidate_count"] == 7
+    assert summary["qualified_turn_count"] == 3
+    assert summary["valid_turn_count"] == 2
+    assert summary["partial_turn_count"] == 1
+    assert summary["rejected_turn_count"] == 4
+    assert summary["rejection_reason_counts"] == {
+        "REJECTED_SHORT": 2,
+        "REJECTED_LOW_COVERAGE": 2,
+    }
+    assert (
+        summary["partial_turn_count"] != artifact["partial_or_noneligible_turn_count"]
+    )
+    assert "INSUFFICIENT_FEATURE_SAMPLES" not in summary["rejection_reason_counts"]
+    path = tmp_path / "a7_turn_truth.json"
+    path.write_text(json.dumps(artifact, allow_nan=False), encoding="utf-8")
+    report = benchmark_analysis_result_artifact(path)
+    turns = next(
+        section["payload"]
+        for section in report["analysis_result"]["sections"]
+        if section["name"] == "TURNS"
+    )
+    assert turns == summary
+
+
+def test_legacy_turn_summary_keeps_missing_fields_null_without_substitution():
+    artifact = _a7_artifact()
+    for field in (
+        "turn_candidate_count",
+        "valid_turn_count",
+        "partial_turn_count",
+        "rejected_turn_count",
+        "rejection_reason_counts",
+    ):
+        artifact.pop(field)
+    artifact["partial_or_noneligible_turn_count"] = 9
+    artifact["blocker_counts"] = {"INSUFFICIENT_FEATURE_SAMPLES": 12}
+    summary = _turn_summary(artifact)
+    assert summary["turn_candidate_count"] is None
+    assert summary["valid_turn_count"] is None
+    assert summary["partial_turn_count"] is None
+    assert summary["rejected_turn_count"] is None
+    assert summary["rejection_reason_counts"] is None
+    assert "LEGACY_ARTIFACT_INCOMPLETE_TURN_SUMMARY" in summary["limitations"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"turn_candidate_count": 6},
+        {"qualified_turn_count": 4},
+        {"rejected_turn_count": True},
+        {"rejection_reason_counts": {"REJECTED_SHORT": 3}},
+    ],
+)
+def test_inconsistent_complete_turn_summary_rejected(mutation):
+    artifact = _a7_artifact()
+    artifact.update(mutation)
+    with pytest.raises(ValueError, match="A9_TURN_SUMMARY_INCONSISTENT"):
+        _turn_summary(artifact)
