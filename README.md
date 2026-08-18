@@ -324,6 +324,15 @@ missing rather than being inferred. The overlay is a research/debug visualizatio
 physical edge-angle, carving, diagnosis, or production analysis output.
 It does not establish scientific accuracy or Ground Truth validation.
 
+For a manual target, the overlay also distinguishes direct current-frame RTMW `RAW` pose from the
+identity-safe `STABILIZED` pose. A thin RAW skeleton may remain visible while the HUD says
+`analysis=GATED`; this is observability only and does not create a temporal segment, biomechanics
+fact, turn, diagnosis, or score. Missing or low-confidence RAW joints are not drawn. The current
+associated target bbox remains visible while its detection is observable, including `SUSPECT`
+frames. `LOST` without a current association fabricates neither bbox nor pose. The emitted
+`raw_target_pose_debug` counts are non-semantic debug metadata; thresholds, feature registries, and
+analysis fingerprints are unchanged.
+
 Direct CLI equivalent:
 
 ```bash

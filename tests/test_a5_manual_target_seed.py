@@ -42,6 +42,13 @@ class SinglePersonDetector:
         return (Detection(0, BoundingBox2D(100, 40, 100, 240), 0.96),)
 
 
+class DistantPersonDetector:
+    name = "fake-distant-person-detector"
+
+    def detect(self, image, geometry):
+        return (Detection(0, BoundingBox2D(100, 100, 29, 58), 0.20),)
+
+
 class FragmentingDetector:
     name = "fake-fragmenting-detector"
 
@@ -68,6 +75,15 @@ class PoseBackend:
                 points[index] = point
             results.append((points, [0.9] * 133))
         return results
+
+
+class CountingPoseBackend(PoseBackend):
+    def __init__(self):
+        self.call_count = 0
+
+    def infer(self, image, boxes):
+        self.call_count += 1
+        return super().infer(image, boxes)
 
 
 class Appearance:
@@ -340,3 +356,35 @@ def test_manual_identity_flows_to_temporal_and_biomechanics_without_becoming_gt(
     assert biomechanics["manual_target_seed"]["selected_track_id"] == 2
     assert biomechanics_collector.samples[2].raw_target_pose.bbox.x_px == 300
     assert biomechanics["ground_truth"]["TARGET_IDENTITY_ACCURACY_STATUS"] == "UNKNOWN"
+
+
+def test_distant_manual_suspect_keeps_raw_pose_without_trusted_analysis():
+    backend = CountingPoseBackend()
+    collector = TemporalTurnCollector()
+    frames = _frames(4)
+    report = benchmark_biomechanics_frames(
+        input_path="missing.mp4",
+        frames=frames,
+        detector=DistantPersonDetector(),
+        pose_provider=MMPoseRTMWPoseProvider(backend),
+        detector_model={"model_id": "det"},
+        pose_model={"model_id": "pose"},
+        sample_fps=5,
+        appearance_encoder=Appearance(),
+        collector=collector,
+        manual_target_seed=ManualTargetSeed(0.0, 110, 110),
+    )
+
+    assert backend.call_count == len(frames)
+    assert collector.samples[0].identity_confidence < 0.62
+    assert collector.samples[0].identity_state.value == "LOCKED"
+    assert all(sample.raw_target_pose is not None for sample in collector.samples)
+    assert any(
+        sample.identity_state.value == "SUSPECT" for sample in collector.samples[1:]
+    )
+    assert report["frame_biomechanics"]["trusted_frame_count"] == 0
+    assert report["biomechanics_result"]["frame_facts"] == []
+    assert report["turn_segments"] == []
+    assert report["feature_registry_sha256"] == (
+        "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048"
+    )

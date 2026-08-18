@@ -35,6 +35,10 @@ class TemporalTurnCollector:
     def __init__(self, *, keep_images: bool = False) -> None:
         self.samples: list[TargetPoseSample] = []
         self.images: dict[int, bytes] = {}
+        # Overlay-only evidence for a currently observed target association. This is
+        # deliberately kept outside TargetPoseSample and all serialized A1-A9
+        # contracts: a bbox may remain observable while analysis is identity-gated.
+        self.target_bboxes: dict[tuple[int, int], dict[str, Any]] = {}
         self.keep_images = keep_images
 
     def observe(self, frame, observation: dict[str, Any], pose_frame: PoseFrame | None) -> None:
@@ -53,6 +57,10 @@ class TemporalTurnCollector:
                 ),
                 None,
             )
+        if active is not None and active["detection_id"] is not None:
+            debug_bbox = active.get("bbox") or observation.get("selected_bbox")
+            if isinstance(debug_bbox, dict):
+                self.target_bboxes[(frame.timestamp_us, frame.frame_index)] = debug_bbox
         self.samples.append(
             TargetPoseSample(
                 observation["timestamp_us"],

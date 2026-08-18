@@ -7,11 +7,24 @@ import pytest
 
 from slopecoach_ml.benchmark.biomechanics_debug import (
     _containing_turn,
+    _draw_raw_target_pose,
     _draw_temporal_skeleton,
     _overlay_point_radius,
+    _raw_pose_points,
     write_biomechanics_overlay_video,
 )
 from slopecoach_ml.cli.__main__ import _temporal_collector, build_parser
+from slopecoach_ml.identity import TargetIdentityState
+from slopecoach_ml.pose import (
+    BoundingBox2D,
+    FrameGeometry,
+    Joint,
+    Keypoint2D,
+    PersonPose2D,
+)
+from slopecoach_ml.temporal import TargetPoseSample
+from slopecoach_ml.temporal import stabilize_target_pose_stream
+from slopecoach_ml.turns import TurnSegmentationConfig, build_turn_signal, segment_turns
 
 
 class FakeCanvas:
@@ -45,6 +58,7 @@ class FakeCV2:
         self.lines = []
         self.circles = []
         self.rectangles = []
+        self.texts = []
         self.writer = FakeWriter(opened=writer_opened)
 
     def imdecode(self, encoded, _mode):
@@ -68,7 +82,8 @@ class FakeCV2:
     def circle(self, _canvas, center, radius, color, thickness, line_type=None):
         self.circles.append((center, radius, color, thickness, line_type))
 
-    def putText(self, *_args):
+    def putText(self, _canvas, text, *_args):
+        self.texts.append(text)
         return None
 
 
@@ -96,6 +111,31 @@ def _joint(provenance, *, raw=(10, 20), stabilized=(11, 21)):
         "stabilized_x_px": stabilized[0],
         "stabilized_y_px": stabilized[1],
     }
+
+
+def _raw_sample(*, state=TargetIdentityState.LOCKED, confidence=0.8, keypoints=None):
+    geometry = FrameGeometry(640, 480)
+    pose = PersonPose2D(
+        BoundingBox2D(90, 80, 100, 260),
+        0.9,
+        keypoints
+        or {
+            Joint.LEFT_HIP: Keypoint2D(120, 200, 0.9),
+            Joint.LEFT_KNEE: Keypoint2D(125, 270, 0.9),
+            Joint.LEFT_ANKLE: Keypoint2D(130, 335, 0.9),
+        },
+        4,
+    )
+    return TargetPoseSample(
+        100_000,
+        1,
+        "target-1",
+        7,
+        state,
+        confidence,
+        geometry,
+        pose,
+    )
 
 
 def _report():
@@ -174,6 +214,77 @@ def test_skeleton_provenance_skips_missing_coordinates_safely():
         ((2, 2), 2, (0, 255, 255), -1, cv2.LINE_AA),
         ((4, 4), 2, (0, 255, 255), 2, cv2.LINE_AA),
     ]
+
+
+def test_trusted_target_can_render_raw_and_stabilized_layers():
+    cv2 = FakeCV2()
+    raw = _raw_sample()
+    assert _draw_raw_target_pose(cv2, FakeCanvas(), raw)
+    raw_line_count = len(cv2.lines)
+    _draw_temporal_skeleton(
+        cv2,
+        FakeCanvas(),
+        {
+            "left_hip": _joint("OBSERVED", stabilized=(120, 200)),
+            "left_knee": _joint("OBSERVED", stabilized=(125, 270)),
+            "left_ankle": _joint("OBSERVED", stabilized=(130, 335)),
+        },
+    )
+    assert raw_line_count == 2
+    assert len(cv2.lines) == 4
+    assert cv2.lines[0][2:] == ((255, 160, 0), 1, cv2.LINE_AA)
+    assert cv2.lines[-1][2:] == ((0, 255, 0), 2, cv2.LINE_AA)
+
+
+def test_raw_pose_hides_low_confidence_and_out_of_frame_joints():
+    raw = _raw_sample(
+        keypoints={
+            Joint.LEFT_HIP: Keypoint2D(120, 200, 0.9),
+            Joint.LEFT_KNEE: Keypoint2D(125, 270, 0.2),
+            Joint.LEFT_ANKLE: Keypoint2D(700, 335, 0.9),
+        }
+    )
+    cv2 = FakeCV2()
+    assert _raw_pose_points(raw) == {"left_hip": (120, 200)}
+    assert _draw_raw_target_pose(cv2, FakeCanvas(), raw)
+    assert cv2.lines == []
+    assert len(cv2.circles) == 1
+
+
+def test_lost_without_current_target_pose_draws_no_raw_skeleton():
+    raw = _raw_sample(state=TargetIdentityState.LOST, confidence=0.0)
+    raw = TargetPoseSample(
+        raw.timestamp_us,
+        raw.frame_index,
+        raw.target_id,
+        None,
+        raw.identity_state,
+        raw.identity_confidence,
+        raw.geometry,
+        None,
+    )
+    cv2 = FakeCV2()
+    assert not _draw_raw_target_pose(cv2, FakeCanvas(), raw)
+    assert cv2.lines == []
+    assert cv2.circles == []
+
+
+def test_suspect_raw_pose_remains_outside_temporal_turn_and_biomechanics_path():
+    raw = _raw_sample(state=TargetIdentityState.SUSPECT, confidence=0.55)
+    temporal = stabilize_target_pose_stream([raw])
+    stabilized = temporal.samples[0]
+    assert raw.raw_target_pose is not None
+    assert stabilized.temporal_segment_id is None
+    assert stabilized.observed_joint_count == 0
+    assert all(point.stabilized_x_px is None for point in stabilized.joints.values())
+
+    signal = build_turn_signal([stabilized])
+    assert signal[0].value is None
+    assert segment_turns(signal, (), (), TurnSegmentationConfig()) == []
+    # The benchmark computes facts only for samples admitted to a temporal segment.
+    assert [
+        sample for sample in temporal.samples if sample.temporal_segment_id is not None
+    ] == []
 
 
 def test_overlay_hides_eye_and_ear_landmarks_but_keeps_one_head_point():
@@ -265,4 +376,65 @@ def test_overlay_video_metadata_and_timestamp_order(monkeypatch, tmp_path):
         "width_px": 640,
         "height_px": 480,
         "source_model_rerun": False,
+        "raw_target_pose_debug": {
+            "enabled": True,
+            "raw_pose_frame_count": 0,
+            "analysis_gated_raw_pose_frame_count": 0,
+            "trusted_stabilized_pose_frame_count": 0,
+        },
     }
+
+
+def test_manual_suspect_overlay_shows_raw_bbox_and_debug_gate_without_rerun(
+    monkeypatch, tmp_path
+):
+    cv2 = _install_video_fakes(monkeypatch)
+    raw = _raw_sample(state=TargetIdentityState.SUSPECT, confidence=0.55)
+    report = {
+        "manual_target_seed": {"selection_source": "MANUAL_SEED"},
+        "_upstream_debug_report": {
+            "temporal_trace": [
+                {
+                    "timestamp_us": raw.timestamp_us,
+                    "frame_index": raw.frame_index,
+                    "temporal_segment_id": None,
+                    "target_id": raw.target_id,
+                    "active_track_id": raw.active_track_id,
+                    "identity_state": raw.identity_state.value,
+                    "joints": {},
+                }
+            ],
+            "turn_signal_samples": [],
+        },
+        "turn_segments": [],
+        "biomechanics_result": {"frame_facts": []},
+    }
+
+    class PoisonModel:
+        def __getattr__(self, name):
+            raise AssertionError(f"overlay attempted model access: {name}")
+
+    collector = SimpleNamespace(
+        images={raw.frame_index: b"frame"},
+        samples=[raw],
+        target_bboxes={
+            (raw.timestamp_us, raw.frame_index): raw.raw_target_pose.bbox.to_dict()
+        },
+        detector=PoisonModel(),
+        pose_provider=PoisonModel(),
+    )
+    metadata = write_biomechanics_overlay_video(
+        tmp_path / "manual.mp4", report, collector, fps=5
+    )
+    assert metadata["source_model_rerun"] is False
+    assert metadata["raw_target_pose_debug"] == {
+        "enabled": True,
+        "raw_pose_frame_count": 1,
+        "analysis_gated_raw_pose_frame_count": 1,
+        "trusted_stabilized_pose_frame_count": 0,
+    }
+    assert len(cv2.rectangles) == 1
+    assert len(cv2.lines) == 2
+    assert any("target_source=MANUAL_SEED" in text for text in cv2.texts)
+    assert any("analysis=GATED raw_pose=AVAILABLE" in text for text in cv2.texts)
+    assert "RAW POSE DEBUG ONLY" in cv2.texts

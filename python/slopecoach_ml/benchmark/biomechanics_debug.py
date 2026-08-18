@@ -8,12 +8,17 @@ from typing import Any
 
 from slopecoach_ml.pose import Joint
 from slopecoach_ml.pose.overlay import COCO17_EDGES
+from slopecoach_ml.temporal import TemporalPoseConfig
 
 from .temporal_debug import write_temporal_debug_artifacts
 
 _BODY_OVERLAY_JOINTS = frozenset(joint.value for edge in COCO17_EDGES for joint in edge) | {
     Joint.NOSE.value
 }
+_RAW_POSE_COLOR = (255, 160, 0)
+_STABILIZED_LINE_COLOR = (0, 255, 0)
+_STABILIZED_JOINT_COLOR = (0, 255, 255)
+_TARGET_BBOX_COLOR = (0, 255, 0)
 
 
 def write_biomechanics_debug_artifacts(output_dir, report, collector, *, max_frames=12):
@@ -160,7 +165,16 @@ def write_biomechanics_overlay_video(
     writer = None
     written = 0
     skipped = 0
+    raw_pose_frames = 0
+    gated_raw_pose_frames = 0
+    trusted_stabilized_pose_frames = 0
     width = height = None
+    selection_source = (
+        report.get("manual_target_seed", {}).get("selection_source", "AUTO")
+        if isinstance(report.get("manual_target_seed"), dict)
+        else "AUTO"
+    )
+    target_bboxes = getattr(collector, "target_bboxes", {})
     try:
         for sample in ordered_trace:
             frame_index = sample["frame_index"]
@@ -186,11 +200,33 @@ def write_biomechanics_overlay_video(
                 canvas = cv2.resize(canvas, (width, height))
 
             raw = raw_samples.get((sample["timestamp_us"], frame_index))
+            bbox = target_bboxes.get((sample["timestamp_us"], frame_index))
+            if bbox is None and raw is not None and raw.raw_target_pose is not None:
+                bbox = raw.raw_target_pose.bbox.to_dict()
+            _draw_target_bbox(cv2, canvas, bbox)
+            raw_available = _draw_raw_target_pose(cv2, canvas, raw)
             _draw_temporal_skeleton(cv2, canvas, sample.get("joints", {}))
+            stabilized_available = _stabilized_pose_available(sample.get("joints", {}))
+            analysis_trusted = sample.get("temporal_segment_id") is not None
+            raw_pose_frames += int(raw_available)
+            gated_raw_pose_frames += int(raw_available and not analysis_trusted)
+            trusted_stabilized_pose_frames += int(analysis_trusted and stabilized_available)
             signal = signal_by_timestamp.get(sample["timestamp_us"])
             turn = _containing_turn(turns, sample["timestamp_us"])
             facts = facts_by_timestamp.get(sample["timestamp_us"], {})
-            _draw_hud(cv2, canvas, sample, raw, signal, turn, facts)
+            _draw_hud(
+                cv2,
+                canvas,
+                sample,
+                raw,
+                signal,
+                turn,
+                facts,
+                selection_source=selection_source,
+                raw_available=raw_available,
+                stabilized_available=stabilized_available,
+                analysis_trusted=analysis_trusted,
+            )
             writer.write(canvas)
             written += 1
     finally:
@@ -208,7 +244,67 @@ def write_biomechanics_overlay_video(
         "width_px": width,
         "height_px": height,
         "source_model_rerun": False,
+        "raw_target_pose_debug": {
+            "enabled": True,
+            "raw_pose_frame_count": raw_pose_frames,
+            "analysis_gated_raw_pose_frame_count": gated_raw_pose_frames,
+            "trusted_stabilized_pose_frame_count": trusted_stabilized_pose_frames,
+        },
     }
+
+
+def _draw_target_bbox(cv2: Any, canvas: Any, bbox: Any) -> None:
+    if not isinstance(bbox, dict):
+        return
+    values = tuple(bbox.get(key) for key in ("x_px", "y_px", "width_px", "height_px"))
+    if any(not isinstance(value, int | float) for value in values):
+        return
+    x_px, y_px, width_px, height_px = values
+    if width_px <= 0 or height_px <= 0:
+        return
+    cv2.rectangle(
+        canvas,
+        (round(x_px), round(y_px)),
+        (round(x_px + width_px), round(y_px + height_px)),
+        _TARGET_BBOX_COLOR,
+        1,
+        cv2.LINE_AA,
+    )
+
+
+def _raw_pose_points(raw_sample: Any) -> dict[str, tuple[int, int]]:
+    pose = getattr(raw_sample, "raw_target_pose", None)
+    geometry = getattr(raw_sample, "geometry", None)
+    if pose is None or geometry is None:
+        return {}
+    minimum_confidence = TemporalPoseConfig().minimum_joint_confidence
+    points = {}
+    for joint in Joint:
+        if joint.value not in _BODY_OVERLAY_JOINTS:
+            continue
+        point = pose.joint(joint)
+        if (
+            point is None
+            or point.confidence < minimum_confidence
+            or not point.is_inside_frame(geometry)
+        ):
+            continue
+        points[joint.value] = (round(point.x_px), round(point.y_px))
+    return points
+
+
+def _draw_raw_target_pose(cv2: Any, canvas: Any, raw_sample: Any) -> bool:
+    """Draw only current-frame model output; never interpolation or biomechanics."""
+    points = _raw_pose_points(raw_sample)
+    if not points:
+        return False
+    for first, second in COCO17_EDGES:
+        start, end = points.get(first.value), points.get(second.value)
+        if start is not None and end is not None:
+            cv2.line(canvas, start, end, _RAW_POSE_COLOR, 1, cv2.LINE_AA)
+    for point in points.values():
+        cv2.circle(canvas, point, 1, _RAW_POSE_COLOR, 1, cv2.LINE_AA)
+    return True
 
 
 def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> None:
@@ -221,7 +317,7 @@ def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> No
         stable_b = _point(b, "stabilized")
         if stable_a is None or stable_b is None:
             continue
-        cv2.line(canvas, stable_a, stable_b, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.line(canvas, stable_a, stable_b, _STABILIZED_LINE_COLOR, 2, cv2.LINE_AA)
     for joint_name, point in joints.items():
         if joint_name not in _BODY_OVERLAY_JOINTS:
             continue
@@ -229,7 +325,16 @@ def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> No
         if stable is None:
             continue
         thickness = 2 if point.get("provenance") == "INTERPOLATED" else -1
-        cv2.circle(canvas, stable, point_radius, (0, 255, 255), thickness, cv2.LINE_AA)
+        cv2.circle(canvas, stable, point_radius, _STABILIZED_JOINT_COLOR, thickness, cv2.LINE_AA)
+
+
+def _stabilized_pose_available(joints: dict[str, Any]) -> bool:
+    return any(
+        joint_name in _BODY_OVERLAY_JOINTS
+        and isinstance(point, dict)
+        and _point(point, "stabilized") is not None
+        for joint_name, point in joints.items()
+    )
 
 
 def _overlay_point_radius(joints: dict[str, Any]) -> int:
@@ -272,6 +377,11 @@ def _draw_hud(
     signal: dict[str, Any] | None,
     turn: dict[str, Any] | None,
     facts: dict[str, Any],
+    *,
+    selection_source: str,
+    raw_available: bool,
+    stabilized_available: bool,
+    analysis_trusted: bool,
 ) -> None:
     confidence = getattr(raw_sample, "identity_confidence", None)
     identity = (
@@ -283,7 +393,13 @@ def _draw_hud(
     turn_label = f"turn={turn.get('turn_id')} status={turn.get('status')}" if turn else "turn=null"
     labels = (
         f"sampled debug t={sample['timestamp_us'] / 1e6:.3f}s frame={sample['frame_index']}",
-        f"target={sample.get('target_id')} track={sample.get('active_track_id')} {identity}",
+        f"target_source={selection_source} target={sample.get('target_id')} "
+        f"track={sample.get('active_track_id')}",
+        identity,
+        f"analysis={'TRUSTED' if analysis_trusted else 'GATED'} "
+        f"raw_pose={'AVAILABLE' if raw_available else 'UNAVAILABLE'} "
+        f"stabilized_pose={'AVAILABLE' if stabilized_available else 'UNAVAILABLE'}",
+        "RAW POSE DEBUG ONLY" if raw_available and not analysis_trusted else "",
         f"turn proxy / lateral proxy={_fmt(proxy)} {turn_label}",
         "2D knee L/R="
         f"{_fmt(facts.get('left_knee_angle_2d_deg'))}/"
@@ -291,7 +407,7 @@ def _draw_hud(
         f"delta={_fmt(facts.get('bilateral_knee_abs_difference_2d_deg'))}",
         f"2D signed lateral proxy={_fmt(facts.get('signed_lateral_body_proxy'))}",
     )
-    for row, label in enumerate(labels):
+    for row, label in enumerate(item for item in labels if item):
         cv2.putText(
             canvas,
             label,
