@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -40,7 +41,11 @@ from slopecoach_ml.detection.mmdet_provider import (
     OpenMMLabMMDetBackend,
 )
 from slopecoach_ml.diagnosis import run_diagnosis_golden
-from slopecoach_ml.identity import load_target_ground_truth, prepare_target_gt_template
+from slopecoach_ml.identity import (
+    ManualTargetSeed,
+    load_target_ground_truth,
+    prepare_target_gt_template,
+)
 from slopecoach_ml.models import load_model_registry
 from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
 from slopecoach_ml.pose import render_debug_overlay
@@ -94,8 +99,42 @@ def _write_json(payload: dict[str, Any], output: str | None) -> None:
         print(rendered, end="")
 
 
+def _nonnegative_finite_seconds(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("target seed time must be numeric") from error
+    if not math.isfinite(parsed) or parsed < 0:
+        raise argparse.ArgumentTypeError("target seed time must be finite and >= 0")
+    return parsed
+
+
+def _source_pixel_point(value: str) -> tuple[float, float]:
+    parts = value.split(",")
+    if len(parts) != 2 or not all(parts):
+        raise argparse.ArgumentTypeError("target seed point must be exactly X,Y")
+    try:
+        x_px, y_px = (float(item) for item in parts)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("target seed point X,Y must be numeric") from error
+    if not math.isfinite(x_px) or not math.isfinite(y_px):
+        raise argparse.ArgumentTypeError("target seed point X,Y must be finite")
+    return x_px, y_px
+
+
+class _SlopeCoachArgumentParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        parsed = super().parse_args(args, namespace)
+        if parsed.command == "benchmark-biomechanics":
+            has_time = parsed.target_seed_time is not None
+            has_point = parsed.target_seed_point is not None
+            if has_time != has_point:
+                self.error("--target-seed-time and --target-seed-point must be supplied together")
+        return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="SlopeCoach research/reference CLI")
+    parser = _SlopeCoachArgumentParser(description="SlopeCoach research/reference CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
     golden = subparsers.add_parser("golden", help="run the deterministic golden pose pipeline")
     golden.add_argument("--fixture", default=str(_root() / "fixtures/golden_pose_001.json"))
@@ -289,6 +328,17 @@ def build_parser() -> argparse.ArgumentParser:
     biomechanics.add_argument("--debug-dir")
     biomechanics.add_argument(
         "--overlay-video", help="write a sampled pose/biomechanics debug MP4 without model reruns"
+    )
+    biomechanics.add_argument(
+        "--target-seed-time",
+        type=_nonnegative_finite_seconds,
+        help="manual identity initialization time on the source-video timeline, in seconds",
+    )
+    biomechanics.add_argument(
+        "--target-seed-point",
+        type=_source_pixel_point,
+        metavar="X,Y",
+        help="manual identity initialization point in upright SourcePixel2D coordinates",
     )
     biomechanics.add_argument("--max-debug-frames", type=int, default=12)
     biomechanics.add_argument("--input-non-mirrored", action="store_true")
@@ -794,6 +844,11 @@ def main(argv: list[str] | None = None) -> int:
                 collector=collector,
                 target_identity_gt_status=identity_gt_status,
             )
+            if args.command == "benchmark-biomechanics" and args.target_seed_time is not None:
+                runner_kwargs["manual_target_seed"] = ManualTargetSeed(
+                    args.target_seed_time,
+                    *args.target_seed_point,
+                )
             if args.command == "benchmark-sport-type":
                 runner_kwargs["user_selection"] = {
                     "auto": None,

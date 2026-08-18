@@ -31,6 +31,14 @@ from .ground_truth import (
 )
 from .gt_template import prepare_target_gt_template
 from .manager import RecoveryEvent, TargetIdentityManager
+from .manual_seed import (
+    ManualTargetSeed,
+    ManualTargetSeedMatch,
+    manual_seed_frame_is_eligible,
+    manual_seed_timestamp_tolerance_us,
+    manual_seed_window_has_passed,
+    select_manual_target_seed_match,
+)
 from .scheduling import schedule_pose_track_ids, target_biomechanics_allowed
 from .selector import AutoInitialTargetSelector, weighted_available
 
@@ -47,6 +55,8 @@ __all__ = [
     "InitialSelectionEvidence",
     "InitialSelectionResult",
     "InitialTargetSelectorConfig",
+    "ManualTargetSeed",
+    "ManualTargetSeedMatch",
     "PersonCandidate",
     "PoseSchedulingConfig",
     "RecoveryEvent",
@@ -61,8 +71,12 @@ __all__ = [
     "evaluate_candidates",
     "evaluate_target_identity_ground_truth",
     "load_target_ground_truth",
+    "manual_seed_frame_is_eligible",
+    "manual_seed_timestamp_tolerance_us",
+    "manual_seed_window_has_passed",
     "prepare_target_gt_template",
     "schedule_pose_track_ids",
+    "select_manual_target_seed_match",
     "target_biomechanics_allowed",
     "update_gallery",
     "weighted_available",

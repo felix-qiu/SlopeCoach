@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
-from slopecoach_ml.identity import TargetIdentityState
+from slopecoach_ml.identity import ManualTargetSeed, TargetIdentityState
 from slopecoach_ml.pose import PoseFrame
 from slopecoach_ml.temporal import (
     TargetPoseSample,
@@ -94,6 +94,7 @@ def benchmark_temporal_turns_frames(
     collector: TemporalTurnCollector | None = None,
     appearance_encoder: Any | None = None,
     target_identity_gt_status: str = "NOT_AVAILABLE",
+    manual_target_seed: ManualTargetSeed | None = None,
 ) -> dict[str, Any]:
     temporal_settings = temporal_config or TemporalPoseConfig()
     turn_settings = turn_config or TurnSegmentationConfig()
@@ -115,6 +116,7 @@ def benchmark_temporal_turns_frames(
         frame_observer=sink.observe,
         appearance_encoder=appearance_encoder,
         ground_truth_status=target_identity_gt_status,
+        manual_target_seed=manual_target_seed,
     )
     temporal = stabilize_target_pose_stream(sink.samples, temporal_settings)
     stage = time.perf_counter()
@@ -284,4 +286,6 @@ def benchmark_temporal_turns_frames(
         "zero_crossings": [crossing.to_dict() for crossing in crossings],
         "turn_segments": [segment.to_dict() for segment in segments],
     }
+    if "manual_target_seed" in identity_report:
+        report["manual_target_seed"] = identity_report["manual_target_seed"]
     return report

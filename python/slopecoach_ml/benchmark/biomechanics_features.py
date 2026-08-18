@@ -20,6 +20,7 @@ from slopecoach_ml.biomechanics import (
     derivative_aggregates,
     feature_coverage,
 )
+from slopecoach_ml.identity import ManualTargetSeed
 from slopecoach_ml.temporal import (
     TemporalPoseConfig,
     segment_body_scales,
@@ -52,6 +53,7 @@ def benchmark_biomechanics_frames(
     collector: TemporalTurnCollector | None = None,
     appearance_encoder: Any | None = None,
     target_identity_gt_status: str = "NOT_AVAILABLE",
+    manual_target_seed: ManualTargetSeed | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     sink = collector or TemporalTurnCollector()
@@ -69,6 +71,7 @@ def benchmark_biomechanics_frames(
         collector=sink,
         appearance_encoder=appearance_encoder,
         target_identity_gt_status=target_identity_gt_status,
+        manual_target_seed=manual_target_seed,
     )
     temporal_config, turn_config = TemporalPoseConfig(), TurnSegmentationConfig()
     temporal = stabilize_target_pose_stream(sink.samples, temporal_config)
@@ -216,4 +219,6 @@ def benchmark_biomechanics_frames(
         "limitations": list(result.limitations),
         "_upstream_debug_report": upstream,
     }
+    if "manual_target_seed" in upstream:
+        report["manual_target_seed"] = upstream["manual_target_seed"]
     return report

@@ -212,11 +212,11 @@ make benchmark-temporal-turns \
   DEBUG_DIR=artifacts/debug/a4_temporal_turns/example_5fps
 ```
 
-The A4 benchmark continues through the A3 identity manager and target-focused RTMW scheduler. It
-does not pick `persons[0]`, the largest box, or a manual target. Target Identity annotation remains
-deferred and the existing template remains `UNLABELED`; identity accuracy is unknown. Turn GT is
-also unavailable, so precision/recall/F1 remain JSON `null`. This blocks product validation, not
-deterministic temporal engineering work.
+The A4 benchmark continues through the A3 identity manager and target-focused RTMW scheduler. Its
+default path does not pick `persons[0]`, the largest box, or a manual target. Target Identity
+annotation remains deferred and the existing template remains `UNLABELED`; identity accuracy is
+unknown. Turn GT is also unavailable, so precision/recall/F1 remain JSON `null`. This blocks
+product validation, not deterministic temporal engineering work.
 
 A4.1 makes both extrema generation and acceptance local to a `ValidSignalRun`: a maximal,
 strictly timestamp-increasing sequence with one temporal segment, finite signal values, and
@@ -333,6 +333,38 @@ python -m slopecoach_ml.cli benchmark-biomechanics "$VIDEO" \
   --debug-dir artifacts/local/a5_debug \
   --overlay-video artifacts/local/pose_overlay.mp4
 ```
+
+For a crowded video, `benchmark-biomechanics` optionally accepts a manual **initial target seed**:
+
+```bash
+VIDEO="/Users/felix/Desktop/1794bbe778d0e9f6f34e2d2bd010f2e7.mp4"
+
+SLOPECOACH_DEVICE=cpu \
+SLOPECOACH_DETECTOR_CONFIG="$PWD/artifacts/openmmlab-src/mmpose-1.3.2/projects/rtmpose/rtmdet/person/rtmdet_m_640-8xb32_coco-person.py" \
+SLOPECOACH_DETECTOR_CHECKPOINT="$PWD/artifacts/models/rtmdet_m_8xb32-100e_coco-obj365-person-235e8209.pth" \
+SLOPECOACH_POSE_CONFIG="$PWD/artifacts/openmmlab-src/mmpose-1.3.2/projects/rtmpose/rtmpose/wholebody_2d_keypoint/rtmw-l_8xb1024-270e_cocktail14-256x192.py" \
+SLOPECOACH_POSE_CHECKPOINT="$PWD/artifacts/models/rtmw-dw-x-l_simcc-cocktail14_270e-256x192-20231122.pth" \
+PYTHONPATH="$PWD/python" \
+"$PWD/artifacts/openmmlab-venv/bin/python" -m slopecoach_ml.cli benchmark-biomechanics \
+  "$VIDEO" \
+  --sample-fps 5 \
+  --input-non-mirrored \
+  --target-seed-time 1.6 \
+  --target-seed-point 820,460 \
+  --output "$PWD/artifacts/local/a5_manual_target.json" \
+  --debug-dir "$PWD/artifacts/local/a5_manual_target_debug" \
+  --overlay-video "$PWD/artifacts/local/pose_overlay_manual_target.mp4"
+```
+
+The point is an upright, non-mirrored source-frame pixel coordinate (`SourcePixel2D`: top-left
+origin, x right, y down). Both seed flags are required together. The click selects one viable
+candidate only at the nearest eligible sampled initialization frame; it is not a permanent Track
+ID pin. Subsequent `LOCKED`, `SUSPECT`, `LOST`, `RECOVERING`, and `AMBIGUOUS` behavior remains
+automatic through the existing tracker and `TargetIdentityManager`, including recovery onto a new
+Track ID. The seed is not Ground Truth and does not validate identity accuracy. An explicit seed
+whose frame, point, or containing viable person cannot be resolved fails closed and never falls
+back to another automatically selected person. Omitting both flags preserves the existing AUTO
+path and output shape.
 
 ## A6.3 SportType calibration research
 
@@ -562,7 +594,8 @@ The default appearance descriptor is a bounded HSV histogram with safely clipped
 lightweight research evidence, not deep ReID (`DEEP_REID_STATUS = NOT_CONFIGURED`). Pose
 scheduling is bounded: initialization/ambiguity may probe at most two candidates, a locked frame
 poses only the active target, and uncertain states suppress target biomechanics. Manual user
-target correction remains architecturally possible but deferred.
+correction remains deferred. The optional A5 manual target seed is initialization provenance only,
+not correction, Track ID pinning, or Ground Truth.
 
 All A3.1 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
 research defaults; they are conservative provisional defaults, not scientifically validated

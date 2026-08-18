@@ -19,6 +19,7 @@ from slopecoach_ml.identity import (
     GroundTruthEvaluationConfig,
     HSVHistogramAppearanceEncoder,
     InitialTargetSelectorConfig,
+    ManualTargetSeed,
     PoseSchedulingConfig,
     TargetIdentityConfig,
     TargetIdentityGroundTruth,
@@ -26,7 +27,10 @@ from slopecoach_ml.identity import (
     TargetIdentityState,
     evaluate_candidates,
     evaluate_target_identity_ground_truth,
+    manual_seed_frame_is_eligible,
+    manual_seed_window_has_passed,
     schedule_pose_track_ids,
+    select_manual_target_seed_match,
     target_biomechanics_allowed,
 )
 from slopecoach_ml.pose import PoseFrame
@@ -47,6 +51,33 @@ def _p95(values: list[float]) -> float | None:
         return None
     ordered = sorted(values)
     return ordered[math.ceil(0.95 * len(ordered)) - 1]
+
+
+def _manual_seed_frame_annotations(
+    frames: Iterable[SampledFrame], seed: ManualTargetSeed | None, sample_fps: float
+) -> Iterable[tuple[SampledFrame, bool]]:
+    """Mark the closest eligible sample, preferring the earlier sample on a tie."""
+
+    if seed is None:
+        for sampled in frames:
+            yield sampled, False
+        return
+    iterator = iter(frames)
+    try:
+        current = next(iterator)
+    except StopIteration:
+        return
+    requested = seed.requested_timestamp_us
+    for following in iterator:
+        current_eligible = manual_seed_frame_is_eligible(seed, current.timestamp_us, sample_fps)
+        following_eligible = manual_seed_frame_is_eligible(seed, following.timestamp_us, sample_fps)
+        current_is_closest = current_eligible and (
+            not following_eligible
+            or abs(current.timestamp_us - requested) <= abs(following.timestamp_us - requested)
+        )
+        yield current, current_is_closest
+        current = following
+    yield current, manual_seed_frame_is_eligible(seed, current.timestamp_us, sample_fps)
 
 
 def _config_dict(candidate, tracking, selector, identity, scheduling, ground_truth):
@@ -85,6 +116,7 @@ def benchmark_target_identity_frames(
     target_ground_truth: TargetIdentityGroundTruth | None = None,
     ground_truth_config: GroundTruthEvaluationConfig | None = None,
     ground_truth_status: str = "NOT_AVAILABLE",
+    manual_target_seed: ManualTargetSeed | None = None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     candidate_settings = candidate_config or CandidateFilterConfig()
@@ -93,6 +125,8 @@ def benchmark_target_identity_frames(
     identity_settings = identity_config or TargetIdentityConfig()
     scheduling_settings = scheduling_config or PoseSchedulingConfig()
     ground_truth_settings = ground_truth_config or GroundTruthEvaluationConfig()
+    if manual_target_seed is not None:
+        manual_target_seed.validate()
     for settings in (
         candidate_settings,
         tracking_settings,
@@ -125,7 +159,16 @@ def benchmark_target_identity_frames(
     relock_frames: list[int] = []
     pose_quality_by_track: dict[int, float] = {}
     confirmed_track_ids: set[int] = set()
-    for sampled in frames:
+    manual_seed_application: dict[str, Any] | None = None
+    for sampled, apply_manual_seed in _manual_seed_frame_annotations(
+        frames, manual_target_seed, sample_fps
+    ):
+        if (
+            manual_target_seed is not None
+            and manual_seed_application is None
+            and manual_seed_window_has_passed(manual_target_seed, sampled.timestamp_us, sample_fps)
+        ):
+            raise ValueError("MANUAL_TARGET_SEED_FRAME_NOT_FOUND")
         identity_matches = ()
         if first_timestamp is None:
             first_timestamp = sampled.timestamp_us
@@ -173,7 +216,39 @@ def benchmark_target_identity_frames(
         stage_totals["appearance"] += appearance_latency
         stage = clock()
         selection = None
-        if (
+        if manual_target_seed is not None and manual_seed_application is None:
+            if apply_manual_seed:
+                manual_match = select_manual_target_seed_match(
+                    manual_target_seed,
+                    sampled.geometry,
+                    current_tracks,
+                    candidates_by_detection,
+                )
+                selected = manual_match.track
+                initialization_score = manual_match.candidate.quality_score
+                manager.initialize(
+                    selected,
+                    initialization_score,
+                    sampled.timestamp_us,
+                    descriptors.get(selected.track_id),
+                )
+                first_lock_timestamp = sampled.timestamp_us
+                manual_seed_application = {
+                    "selection_source": "MANUAL_SEED",
+                    "ground_truth_status": "NOT_GROUND_TRUTH",
+                    "requested_time_seconds": manual_target_seed.time_seconds,
+                    "requested_point_source_pixel_2d": {
+                        "x_px": manual_target_seed.x_px,
+                        "y_px": manual_target_seed.y_px,
+                    },
+                    "applied_timestamp_us": sampled.timestamp_us,
+                    "applied_frame_index": sampled.frame_index,
+                    "selected_track_id": selected.track_id,
+                    "selected_detection_id": selected.detection_id,
+                    "selected_bbox": selected.bbox.to_dict(),
+                    "identity_evidence_confidence": initialization_score,
+                }
+        elif (
             manager.identity.state
             in {TargetIdentityState.UNINITIALIZED, TargetIdentityState.AMBIGUOUS}
             and manager.identity.initial_selection_score is None
@@ -365,6 +440,8 @@ def benchmark_target_identity_frames(
                 },
                 pose_frame,
             )
+    if manual_target_seed is not None and manual_seed_application is None:
+        raise ValueError("MANUAL_TARGET_SEED_FRAME_NOT_FOUND")
     finished = clock()
     sampled_count = len(observations)
     total_raw = totals["raw_detections"]
@@ -560,6 +637,8 @@ def benchmark_target_identity_frames(
         report["tracking"].update(evaluation["tracking_gt"])
         report["frame_gt_classifications"] = evaluation["frame_classifications"]
         report["TARGET_IDENTITY_GT_STATUS"] = "AVAILABLE"
+    if manual_seed_application is not None:
+        report["manual_target_seed"] = manual_seed_application
     return report
 
 
