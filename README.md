@@ -613,7 +613,11 @@ lightweight research evidence, not deep ReID (`DEEP_REID_STATUS = NOT_CONFIGURED
 scheduling is bounded: initialization/ambiguity may probe at most two candidates, a locked frame
 poses only the active target, and uncertain states suppress target biomechanics. Manual user
 correction remains deferred. The optional A5 manual target seed is initialization provenance only,
-not correction, Track ID pinning, or Ground Truth.
+not correction, unconditional Track ID pinning, or Ground Truth. After initialization, a viable
+active target track receives first claim on its best geometric association only when the configured
+preferred-association threshold is met. Weak associations still follow normal global competition;
+the benchmark reports both preferred associations and cases where ownership prevented a duplicate
+track from stealing the target detection.
 
 All A3.1 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
 research defaults; they are conservative provisional defaults, not scientifically validated

@@ -7,6 +7,7 @@ import pytest
 
 from slopecoach_ml.benchmark.biomechanics_debug import (
     _containing_turn,
+    _draw_pose_layer,
     _draw_raw_target_pose,
     _draw_temporal_skeleton,
     _overlay_point_radius,
@@ -216,24 +217,38 @@ def test_skeleton_provenance_skips_missing_coordinates_safely():
     ]
 
 
-def test_trusted_target_can_render_raw_and_stabilized_layers():
+def test_pose_layer_prefers_stabilized_and_never_draws_raw_twice():
     cv2 = FakeCV2()
     raw = _raw_sample()
-    assert _draw_raw_target_pose(cv2, FakeCanvas(), raw)
-    raw_line_count = len(cv2.lines)
-    _draw_temporal_skeleton(
+    raw_available, stabilized_available = _draw_pose_layer(
         cv2,
         FakeCanvas(),
+        raw,
         {
             "left_hip": _joint("OBSERVED", stabilized=(120, 200)),
             "left_knee": _joint("OBSERVED", stabilized=(125, 270)),
             "left_ankle": _joint("OBSERVED", stabilized=(130, 335)),
         },
     )
-    assert raw_line_count == 2
-    assert len(cv2.lines) == 4
-    assert cv2.lines[0][2:] == ((255, 160, 0), 1, cv2.LINE_AA)
-    assert cv2.lines[-1][2:] == ((0, 255, 0), 2, cv2.LINE_AA)
+    assert raw_available
+    assert stabilized_available
+    assert len(cv2.lines) == 2
+    assert all(line[2:] == ((0, 255, 0), 2, cv2.LINE_AA) for line in cv2.lines)
+    assert len(cv2.circles) == 3
+    assert all(circle[2:] == ((0, 255, 255), -1, cv2.LINE_AA) for circle in cv2.circles)
+
+
+def test_raw_only_pose_uses_same_green_and_yellow_visual_style():
+    cv2 = FakeCV2()
+    raw_available, stabilized_available = _draw_pose_layer(
+        cv2, FakeCanvas(), _raw_sample(), {}
+    )
+    assert raw_available
+    assert not stabilized_available
+    assert len(cv2.lines) == 2
+    assert all(line[2:] == ((0, 255, 0), 2, cv2.LINE_AA) for line in cv2.lines)
+    assert len(cv2.circles) == 3
+    assert all(circle[2:] == ((0, 255, 255), -1, cv2.LINE_AA) for circle in cv2.circles)
 
 
 def test_raw_pose_hides_low_confidence_and_out_of_frame_joints():

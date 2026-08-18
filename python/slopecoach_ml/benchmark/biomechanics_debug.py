@@ -15,7 +15,6 @@ from .temporal_debug import write_temporal_debug_artifacts
 _BODY_OVERLAY_JOINTS = frozenset(joint.value for edge in COCO17_EDGES for joint in edge) | {
     Joint.NOSE.value
 }
-_RAW_POSE_COLOR = (255, 160, 0)
 _STABILIZED_LINE_COLOR = (0, 255, 0)
 _STABILIZED_JOINT_COLOR = (0, 255, 255)
 _TARGET_BBOX_COLOR = (0, 255, 0)
@@ -206,9 +205,9 @@ def write_biomechanics_overlay_video(
             if bbox is None and raw is not None and raw.raw_target_pose is not None:
                 bbox = raw.raw_target_pose.bbox.to_dict()
             _draw_target_bbox(cv2, canvas, bbox)
-            raw_available = _draw_raw_target_pose(cv2, canvas, raw)
-            _draw_temporal_skeleton(cv2, canvas, sample.get("joints", {}))
-            stabilized_available = _stabilized_pose_available(sample.get("joints", {}))
+            raw_available, stabilized_available = _draw_pose_layer(
+                cv2, canvas, raw, sample.get("joints", {})
+            )
             analysis_trusted = sample.get("temporal_segment_id") is not None
             raw_pose_frames += int(raw_available)
             gated_raw_pose_frames += int(raw_available and not analysis_trusted)
@@ -301,13 +300,34 @@ def _draw_raw_target_pose(cv2: Any, canvas: Any, raw_sample: Any) -> bool:
     points = _raw_pose_points(raw_sample)
     if not points:
         return False
+    point_radius = _point_radius_from_y(point[1] for point in points.values())
     for first, second in COCO17_EDGES:
         start, end = points.get(first.value), points.get(second.value)
         if start is not None and end is not None:
-            cv2.line(canvas, start, end, _RAW_POSE_COLOR, 1, cv2.LINE_AA)
+            cv2.line(canvas, start, end, _STABILIZED_LINE_COLOR, 2, cv2.LINE_AA)
     for point in points.values():
-        cv2.circle(canvas, point, 1, _RAW_POSE_COLOR, 1, cv2.LINE_AA)
+        cv2.circle(
+            canvas,
+            point,
+            point_radius,
+            _STABILIZED_JOINT_COLOR,
+            -1,
+            cv2.LINE_AA,
+        )
     return True
+
+
+def _draw_pose_layer(
+    cv2: Any, canvas: Any, raw_sample: Any, joints: dict[str, Any]
+) -> tuple[bool, bool]:
+    """Render exactly one skeleton, preferring trusted temporal coordinates."""
+    raw_available = bool(_raw_pose_points(raw_sample))
+    stabilized_available = _stabilized_pose_available(joints)
+    if stabilized_available:
+        _draw_temporal_skeleton(cv2, canvas, joints)
+    elif raw_available:
+        _draw_raw_target_pose(cv2, canvas, raw_sample)
+    return raw_available, stabilized_available
 
 
 def _draw_temporal_skeleton(cv2: Any, canvas: Any, joints: dict[str, Any]) -> None:
@@ -348,9 +368,14 @@ def _overlay_point_radius(joints: dict[str, Any]) -> int:
         and isinstance(point, dict)
         and _point(point, "stabilized") is not None
     ]
-    if len(y_coordinates) < 2:
+    return _point_radius_from_y(y_coordinates)
+
+
+def _point_radius_from_y(y_coordinates: Any) -> int:
+    values = tuple(y_coordinates)
+    if len(values) < 2:
         return 2
-    pose_height = max(y_coordinates) - min(y_coordinates)
+    pose_height = max(values) - min(values)
     return max(2, min(5, int(pose_height * 0.012 + 0.5)))
 
 

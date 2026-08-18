@@ -146,6 +146,75 @@ def test_tracker_crossing_is_deterministic_not_detection_order_based() -> None:
     )
 
 
+def test_tracker_reserves_qualifying_detection_for_preferred_target_track() -> None:
+    geometry = FrameGeometry(720, 1280)
+    tracker = ReferenceMotionIoUTracker()
+    # RTMDet can emit two differently sized boxes for one crouched skier. The
+    # narrower duplicate has a better geometric score on the following frame,
+    # but must not steal the manually selected target's sole detection.
+    first = tracker.update(
+        (
+            Detection(1, BoundingBox2D(447.7, 405.8, 59.4, 64.7), 0.33),
+            Detection(2, BoundingBox2D(448.2, 406.8, 37.8, 60.9), 0.60),
+        ),
+        0,
+        0,
+        geometry,
+    )
+    assert [item.track_id for item in first.tracks] == [1, 2]
+
+    following = Detection(3, BoundingBox2D(430.3, 406.9, 39.8, 55.7), 0.74)
+    preferred_score = tracker._score(tracker._tracks[1], following, 200_000)
+    competing_score = tracker._score(tracker._tracks[2], following, 200_000)
+    assert preferred_score is not None and preferred_score >= 0.45
+    assert competing_score is not None and competing_score > preferred_score
+
+    result = tracker.update(
+        (following,),
+        200_000,
+        1,
+        geometry,
+        preferred_track_id=1,
+    )
+    target = next(item for item in result.tracks if item.track_id == 1)
+    duplicate = next(item for item in result.tracks if item.track_id == 2)
+    assert target.detection_id == 3
+    assert target.state is TrackState.CONFIRMED
+    assert duplicate.state is TrackState.MISSING
+    assert tracker.preferred_association_count == 1
+    assert tracker.preferred_association_override_count == 1
+
+
+def test_tracker_does_not_force_weak_preferred_association() -> None:
+    tracker = ReferenceMotionIoUTracker(
+        TrackingConfig(minimum_preferred_association_score=0.70)
+    )
+    tracker.update(
+        (detection(1, 100), detection(2, 130)),
+        0,
+        0,
+        GEOMETRY,
+    )
+    result = tracker.update(
+        (detection(3, 140),),
+        200_000,
+        1,
+        GEOMETRY,
+        preferred_track_id=1,
+    )
+    matched = next(item for item in result.tracks if item.detection_id == 3)
+    assert matched.track_id == 2
+    assert tracker.preferred_association_count == 0
+
+
+def test_tracker_rejects_preferred_threshold_below_general_threshold() -> None:
+    with pytest.raises(ValueError, match="preferred association score"):
+        TrackingConfig(
+            minimum_association_score=0.40,
+            minimum_preferred_association_score=0.39,
+        ).validate()
+
+
 def test_initial_selector_temporal_motion_beats_static_background() -> None:
     selector = AutoInitialTargetSelector(
         InitialTargetSelectorConfig(

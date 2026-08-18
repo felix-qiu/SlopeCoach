@@ -27,6 +27,7 @@ class TrackingConfig:
     association_distance_weight: float = 0.35
     association_scale_weight: float = 0.15
     minimum_association_score: float = 0.25
+    minimum_preferred_association_score: float = 0.45
     confirmation_hits: int = 2
     maximum_missed_duration_us: int = 1_500_000
 
@@ -37,12 +38,17 @@ class TrackingConfig:
             "association_distance_weight",
             "association_scale_weight",
             "minimum_association_score",
+            "minimum_preferred_association_score",
         ):
             value = getattr(self, name)
             if not math.isfinite(value) or not 0 <= value <= 1:
                 raise ValueError(f"{name} must be finite and in [0, 1]")
         if self.maximum_normalized_center_distance <= 0 or self.maximum_scale_ratio < 1:
             raise ValueError("tracking distance/scale limits are invalid")
+        if self.minimum_preferred_association_score < self.minimum_association_score:
+            raise ValueError(
+                "preferred association score must be at least the general association score"
+            )
         if self.confirmation_hits < 1 or self.maximum_missed_duration_us < 0:
             raise ValueError("tracking lifecycle limits are invalid")
         if not math.isclose(
@@ -92,4 +98,6 @@ class Tracker(Protocol):
         timestamp_us: int,
         frame_index: int,
         geometry: FrameGeometry,
+        *,
+        preferred_track_id: int | None = None,
     ) -> TrackingFrame: ...

@@ -195,7 +195,11 @@ def benchmark_target_identity_frames(
         candidates_by_detection = {item.detection_id: item for item in viable}
         stage = clock()
         tracking_frame = tracker.update(
-            viable_detections, sampled.timestamp_us, sampled.frame_index, sampled.geometry
+            viable_detections,
+            sampled.timestamp_us,
+            sampled.frame_index,
+            sampled.geometry,
+            preferred_track_id=manager.identity.active_track_id,
         )
         tracking_latency = clock() - stage
         stage_totals["tracking"] += tracking_latency
@@ -497,6 +501,8 @@ def benchmark_target_identity_frames(
             "total_tracks_created": tracker.total_tracks_created,
             "confirmed_tracks": len(confirmed_track_ids),
             "terminated_track_count": tracker.total_tracks_terminated,
+            "preferred_association_count": tracker.preferred_association_count,
+            "preferred_association_override_count": (tracker.preferred_association_override_count),
             "track_fragmentation_gt_status": "NOT_AVAILABLE",
             "track_fragmentation_count": None,
             "active_track_count_mean": mean(active_track_counts) if active_track_counts else None,

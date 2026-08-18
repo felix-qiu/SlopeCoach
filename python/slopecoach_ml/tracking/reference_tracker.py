@@ -48,6 +48,8 @@ class ReferenceMotionIoUTracker:
         self._next_id = 1
         self.total_tracks_created = 0
         self.total_tracks_terminated = 0
+        self.preferred_association_count = 0
+        self.preferred_association_override_count = 0
 
     def _score(self, track: _MutableTrack, detection: Detection, timestamp_us: int) -> float | None:
         elapsed = max(0, timestamp_us - track.last_seen_us) / 1_000_000
@@ -74,7 +76,15 @@ class ReferenceMotionIoUTracker:
             + self.config.association_scale_weight * scale_score
         )
 
-    def update(self, detections, timestamp_us, frame_index, geometry) -> TrackingFrame:
+    def update(
+        self,
+        detections,
+        timestamp_us,
+        frame_index,
+        geometry,
+        *,
+        preferred_track_id: int | None = None,
+    ) -> TrackingFrame:
         geometry.validate()
         if timestamp_us < 0 or frame_index < 0:
             raise ValueError("timestamp and frame index must be non-negative")
@@ -98,9 +108,31 @@ class ReferenceMotionIoUTracker:
                     pairs.append((-score, track_id, index))
         matched_tracks: set[int] = set()
         matched_detections: set[int] = set()
-        for _, track_id, index in sorted(pairs):
+
+        def association_order(pair: tuple[float, int, int]) -> tuple[bool, float, int, int]:
+            negative_score, track_id, index = pair
+            preferred = (
+                track_id == preferred_track_id
+                and -negative_score >= self.config.minimum_preferred_association_score
+            )
+            return (not preferred, negative_score, track_id, index)
+
+        for negative_score, track_id, index in sorted(pairs, key=association_order):
             if track_id in matched_tracks or index in matched_detections:
                 continue
+            preferred = (
+                track_id == preferred_track_id
+                and -negative_score >= self.config.minimum_preferred_association_score
+            )
+            if preferred:
+                self.preferred_association_count += 1
+                if any(
+                    other_index == index
+                    and other_track_id != track_id
+                    and other_negative_score < negative_score
+                    for other_negative_score, other_track_id, other_index in pairs
+                ):
+                    self.preferred_association_override_count += 1
             track, detection = self._tracks[track_id], ordered[index]
             elapsed = (timestamp_us - track.last_seen_us) / 1_000_000
             if elapsed > 0:
