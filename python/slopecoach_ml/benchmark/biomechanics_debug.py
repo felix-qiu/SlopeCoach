@@ -175,6 +175,7 @@ def write_biomechanics_overlay_video(
         else "AUTO"
     )
     target_bboxes = getattr(collector, "target_bboxes", {})
+    identity_debug = getattr(collector, "identity_debug", {})
     try:
         for sample in ordered_trace:
             frame_index = sample["frame_index"]
@@ -200,7 +201,8 @@ def write_biomechanics_overlay_video(
                 canvas = cv2.resize(canvas, (width, height))
 
             raw = raw_samples.get((sample["timestamp_us"], frame_index))
-            bbox = target_bboxes.get((sample["timestamp_us"], frame_index))
+            sample_key = (sample["timestamp_us"], frame_index)
+            bbox = target_bboxes.get(sample_key)
             if bbox is None and raw is not None and raw.raw_target_pose is not None:
                 bbox = raw.raw_target_pose.bbox.to_dict()
             _draw_target_bbox(cv2, canvas, bbox)
@@ -226,6 +228,7 @@ def write_biomechanics_overlay_video(
                 raw_available=raw_available,
                 stabilized_available=stabilized_available,
                 analysis_trusted=analysis_trusted,
+                identity_debug=identity_debug.get(sample_key, {}),
             )
             writer.write(canvas)
             written += 1
@@ -382,12 +385,14 @@ def _draw_hud(
     raw_available: bool,
     stabilized_available: bool,
     analysis_trusted: bool,
+    identity_debug: dict[str, Any],
 ) -> None:
     confidence = getattr(raw_sample, "identity_confidence", None)
+    match_score = identity_debug.get("latest_identity_match_score")
+    observed_age_us = identity_debug.get("last_observed_age_us")
     identity = (
-        f"identity={sample.get('identity_state')} confidence={_fmt(confidence)}"
-        if confidence is not None
-        else f"identity={sample.get('identity_state')} confidence=null"
+        f"identity={sample.get('identity_state')} confidence={_fmt(confidence)} "
+        f"match_score={_fmt(match_score)} observed_age_ms={_fmt_us_ms(observed_age_us)}"
     )
     proxy = signal.get("value") if signal else None
     turn_label = f"turn={turn.get('turn_id')} status={turn.get('status')}" if turn else "turn=null"
@@ -421,3 +426,7 @@ def _draw_hud(
 
 def _fmt(value):
     return "null" if value is None else f"{value:.2f}"
+
+
+def _fmt_us_ms(value):
+    return "null" if value is None else f"{value / 1000:.0f}"

@@ -214,6 +214,8 @@ class TargetIdentity:
     active_track_id: int | None = None
     confidence: float = 0.0
     initial_selection_score: float | None = None
+    # Trusted identity memory. These fields advance only when evidence meets the
+    # lock threshold and may therefore support identity validation.
     last_bbox: BoundingBox2D | None = None
     last_seen_us: int | None = None
     velocity_x_px_per_s: float = 0.0
@@ -221,6 +223,18 @@ class TargetIdentity:
     velocity_available: bool = False
     trajectory_history: list[tuple[int, float, float]] = field(default_factory=list)
     appearance_gallery: list[Sequence[float]] = field(default_factory=list)
+    # Observed continuity memory is not trusted analysis evidence. It records the
+    # latest physically associated active track so a brief miss is timed from the
+    # actual observation loss rather than an older trusted frame.
+    last_observed_bbox: BoundingBox2D | None = None
+    last_observed_us: int | None = None
+    last_observed_track_id: int | None = None
+    last_observed_velocity_x_px_per_s: float = 0.0
+    last_observed_velocity_y_px_per_s: float = 0.0
+    last_observed_velocity_available: bool = False
+    # Current-update diagnostic only. TargetIdentityManager clears this before
+    # every update and never carries a prior frame's score forward.
+    latest_identity_match_score: float | None = None
 
 
 class AppearanceEncoder(Protocol):

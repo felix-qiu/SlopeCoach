@@ -99,6 +99,22 @@ class TargetIdentityDebugCollector:
                 f"track={active} conf={observation['identity_confidence']:.3f}"
             )
             cv2.putText(canvas, label, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.43, (255, 255, 255), 1)
+            match = observation.get("latest_identity_match_score")
+            observed_age = observation.get("last_observed_age_us")
+            diagnostics = (f"match={match:.3f}" if match is not None else "match=null") + (
+                f" observed_age_ms={observed_age / 1000:.0f}"
+                if observed_age is not None
+                else " observed_age_ms=null"
+            )
+            cv2.putText(
+                canvas,
+                diagnostics,
+                (10, 42),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.43,
+                (255, 255, 255),
+                1,
+            )
             path = destination / f"frame_{frame_index:06d}.jpg"
             if not cv2.imwrite(str(path), canvas):
                 raise RuntimeError("DEBUG_OVERLAY_WRITE_FAILED")

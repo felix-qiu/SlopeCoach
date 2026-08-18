@@ -467,6 +467,118 @@ def test_brief_miss_is_suspect_then_same_track_locks_again() -> None:
     assert manager.identity.state is TargetIdentityState.LOCKED
 
 
+def test_suspect_observations_advance_only_observed_memory_and_refresh_match_score() -> (
+    None
+):
+    manager = TargetIdentityManager()
+    initial = track(7, 300, timestamp=1_600_000)
+    manager.initialize(initial, 0.9, 1_600_000, descriptor=(1, 0))
+    trusted_bbox = manager.identity.last_bbox
+    trusted_seen = manager.identity.last_seen_us
+    trusted_gallery = list(manager.identity.appearance_gallery)
+
+    first = track(7, 304, timestamp=1_800_000)
+    first_matches = manager.update(
+        (first,),
+        {7: candidate(first, quality=0.50)},
+        1_800_000,
+        descriptors={7: (0, 1)},
+    )
+    assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.latest_identity_match_score == first_matches[0].fused_score
+    suspect_confidence = manager.identity.confidence
+
+    second = track(7, 308, timestamp=2_000_000)
+    second_matches = manager.update(
+        (second,),
+        {7: candidate(second, quality=0.45)},
+        2_000_000,
+        descriptors={7: (0, 1)},
+    )
+    assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.last_observed_us == 2_000_000
+    assert manager.identity.last_observed_bbox == second.bbox
+    assert manager.identity.last_observed_track_id == 7
+    assert manager.identity.latest_identity_match_score == second_matches[0].fused_score
+    assert manager.identity.latest_identity_match_score != first_matches[0].fused_score
+    assert manager.identity.confidence == suspect_confidence
+    assert manager.identity.last_bbox == trusted_bbox
+    assert manager.identity.last_seen_us == trusted_seen
+    assert manager.identity.appearance_gallery == trusted_gallery
+    assert not target_biomechanics_allowed(
+        manager.identity.state,
+        manager.identity.confidence,
+        manager.config.safe_biomechanics_confidence,
+    )
+
+
+def test_suspect_missing_timeout_starts_at_latest_observable_association() -> None:
+    manager = TargetIdentityManager()
+    initial = track(7, 300, timestamp=1_600_000)
+    manager.initialize(initial, 0.9, 1_600_000)
+    for timestamp in range(1_800_000, 8_600_001, 200_000):
+        observed = track(7, 300 + timestamp / 1_000_000, timestamp=timestamp)
+        manager.update((observed,), {7: candidate(observed, quality=0.50)}, timestamp)
+        assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.last_seen_us == 1_600_000
+    assert manager.identity.last_observed_us == 8_600_000
+
+    manager.update((), {}, 8_800_000)
+    assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.active_track_id == 7
+    assert manager.identity.latest_identity_match_score is None
+
+    manager.update((), {}, 9_400_001)
+    assert manager.identity.state is TargetIdentityState.LOST
+    assert manager.identity.active_track_id is None
+
+
+def test_suspect_high_match_relocks_and_refreshes_trusted_memory() -> None:
+    manager = TargetIdentityManager()
+    initial = track(7, 300)
+    manager.initialize(initial, 0.9, 0)
+    suspect = track(7, 305, timestamp=200_000)
+    manager.update((suspect,), {7: candidate(suspect, quality=0.50)}, 200_000)
+    assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.last_seen_us == 0
+
+    recovered = track(7, 309, timestamp=400_000)
+    matches = manager.update(
+        (recovered,), {7: candidate(recovered, quality=0.90)}, 400_000
+    )
+    assert matches[0].fused_score >= manager.config.minimum_lock_score
+    assert manager.identity.state is TargetIdentityState.LOCKED
+    assert manager.identity.last_seen_us == 400_000
+    assert manager.identity.last_bbox == recovered.bbox
+    assert manager.identity.last_observed_us == 400_000
+
+
+def test_recent_observed_geometry_proposes_new_track_but_confirmation_is_required() -> (
+    None
+):
+    manager = TargetIdentityManager(
+        TargetIdentityConfig(recovery_confirmation_observations=2)
+    )
+    initial = track(7, 300)
+    manager.initialize(initial, 0.9, 0)
+    observed = track(7, 500, timestamp=1_000_000)
+    manager.update((observed,), {7: candidate(observed, quality=0.50)}, 1_000_000)
+    assert manager.identity.state is TargetIdentityState.SUSPECT
+    assert manager.identity.last_bbox == initial.bbox
+    assert manager.identity.last_observed_bbox == observed.bbox
+    manager.update((), {}, 1_800_000)
+    assert manager.identity.state is TargetIdentityState.LOST
+
+    replacement = track(12, 505, timestamp=2_000_000)
+    matches = manager.update((replacement,), {12: candidate(replacement)}, 2_000_000)
+    assert matches[0].evidence.spatial_similarity > 0.9
+    assert manager.identity.state is TargetIdentityState.RECOVERING
+    assert manager.identity.active_track_id is None
+    manager.update((replacement,), {12: candidate(replacement)}, 2_200_000)
+    assert manager.identity.state is TargetIdentityState.LOCKED
+    assert manager.identity.active_track_id == 12
+
+
 def test_similar_recovery_candidates_are_ambiguous_and_do_not_relock() -> None:
     manager = TargetIdentityManager(
         TargetIdentityConfig(suspect_timeout_us=0, lost_timeout_us=1)

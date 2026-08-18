@@ -382,6 +382,16 @@ def test_distant_manual_suspect_keeps_raw_pose_without_trusted_analysis():
     assert any(
         sample.identity_state.value == "SUSPECT" for sample in collector.samples[1:]
     )
+    suspect_debug = [
+        collector.identity_debug[(sample.timestamp_us, sample.frame_index)]
+        for sample in collector.samples
+        if sample.identity_state.value == "SUSPECT"
+    ]
+    assert suspect_debug
+    assert all(
+        item["latest_identity_match_score"] is not None for item in suspect_debug
+    )
+    assert all(item["last_observed_age_us"] == 0 for item in suspect_debug)
     assert report["frame_biomechanics"]["trusted_frame_count"] == 0
     assert report["biomechanics_result"]["frame_facts"] == []
     assert report["turn_segments"] == []

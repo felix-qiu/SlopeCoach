@@ -420,6 +420,12 @@ def test_manual_suspect_overlay_shows_raw_bbox_and_debug_gate_without_rerun(
         target_bboxes={
             (raw.timestamp_us, raw.frame_index): raw.raw_target_pose.bbox.to_dict()
         },
+        identity_debug={
+            (raw.timestamp_us, raw.frame_index): {
+                "latest_identity_match_score": 0.47,
+                "last_observed_age_us": 0,
+            }
+        },
         detector=PoisonModel(),
         pose_provider=PoisonModel(),
     )
@@ -436,5 +442,6 @@ def test_manual_suspect_overlay_shows_raw_bbox_and_debug_gate_without_rerun(
     assert len(cv2.rectangles) == 1
     assert len(cv2.lines) == 2
     assert any("target_source=MANUAL_SEED" in text for text in cv2.texts)
+    assert any("match_score=0.47 observed_age_ms=0" in text for text in cv2.texts)
     assert any("analysis=GATED raw_pose=AVAILABLE" in text for text in cv2.texts)
     assert "RAW POSE DEBUG ONLY" in cv2.texts

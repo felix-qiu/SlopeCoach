@@ -39,6 +39,7 @@ class TemporalTurnCollector:
         # deliberately kept outside TargetPoseSample and all serialized A1-A9
         # contracts: a bbox may remain observable while analysis is identity-gated.
         self.target_bboxes: dict[tuple[int, int], dict[str, Any]] = {}
+        self.identity_debug: dict[tuple[int, int], dict[str, Any]] = {}
         self.keep_images = keep_images
 
     def observe(self, frame, observation: dict[str, Any], pose_frame: PoseFrame | None) -> None:
@@ -61,6 +62,10 @@ class TemporalTurnCollector:
             debug_bbox = active.get("bbox") or observation.get("selected_bbox")
             if isinstance(debug_bbox, dict):
                 self.target_bboxes[(frame.timestamp_us, frame.frame_index)] = debug_bbox
+        self.identity_debug[(frame.timestamp_us, frame.frame_index)] = {
+            "latest_identity_match_score": observation.get("latest_identity_match_score"),
+            "last_observed_age_us": observation.get("last_observed_age_us"),
+        }
         self.samples.append(
             TargetPoseSample(
                 observation["timestamp_us"],

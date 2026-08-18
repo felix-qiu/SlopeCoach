@@ -46,10 +46,21 @@ class TargetIdentityManager:
         self.identity.active_track_id = track.track_id
         self.identity.confidence = score
         self.identity.initial_selection_score = score
-        self._remember(track, timestamp_us)
+        self.identity.latest_identity_match_score = None
+        self._remember_trusted(track, timestamp_us)
         update_gallery(self.identity.appearance_gallery, descriptor, quality=score)
 
-    def _remember(self, track: TrackObservation, timestamp_us: int) -> None:
+    def _remember_observed(self, track: TrackObservation, timestamp_us: int) -> None:
+        """Refresh physical continuity without granting identity trust."""
+        self.identity.last_observed_bbox = track.bbox
+        self.identity.last_observed_us = timestamp_us
+        self.identity.last_observed_track_id = track.track_id
+        self.identity.last_observed_velocity_x_px_per_s = track.velocity_x_px_per_s
+        self.identity.last_observed_velocity_y_px_per_s = track.velocity_y_px_per_s
+        self.identity.last_observed_velocity_available = track.hit_count >= 2
+
+    def _remember_trusted(self, track: TrackObservation, timestamp_us: int) -> None:
+        """Refresh evidence allowed to participate in trusted identity validation."""
         self.identity.last_bbox = track.bbox
         self.identity.last_seen_us = timestamp_us
         self.identity.velocity_x_px_per_s = track.velocity_x_px_per_s
@@ -61,6 +72,7 @@ class TargetIdentityManager:
         )
         self.identity.trajectory_history.append((timestamp_us, *center))
         del self.identity.trajectory_history[:-20]
+        self._remember_observed(track, timestamp_us)
 
     def _match(
         self,
@@ -70,50 +82,64 @@ class TargetIdentityManager:
         descriptor=None,
         pose_similarity: float | None = None,
     ) -> IdentityMatch:
-        last = self.identity.last_bbox
+        trusted_last = self.identity.last_bbox
+        observed_last = self.identity.last_observed_bbox or trusted_last
         if timestamp_us < 0:
             raise ValueError("timestamp_us must be non-negative")
         predicted_center = candidate_center = trajectory_distance = None
-        if last is None:
-            spatial = trajectory = scale = proportion = None
+        if observed_last is None:
+            spatial = trajectory = None
         else:
-            last_center = (last.x_px + last.width_px / 2, last.y_px + last.height_px / 2)
+            last_center = (
+                observed_last.x_px + observed_last.width_px / 2,
+                observed_last.y_px + observed_last.height_px / 2,
+            )
             center = (
                 track.bbox.x_px + track.bbox.width_px / 2,
                 track.bbox.y_px + track.bbox.height_px / 2,
             )
             candidate_center = center
-            body_scale = max(1.0, math.hypot(last.width_px, last.height_px))
+            body_scale = max(1.0, math.hypot(observed_last.width_px, observed_last.height_px))
             distance = (
                 math.hypot(center[0] - last_center[0], center[1] - last_center[1]) / body_scale
             )
             spatial = max(0.0, 1 - distance / 2)
             if (
-                self.identity.last_seen_us is None
-                or timestamp_us < self.identity.last_seen_us
-                or not self.identity.trajectory_history
-                or not self.identity.velocity_available
+                self.identity.last_observed_us is None
+                or timestamp_us < self.identity.last_observed_us
+                or not self.identity.last_observed_velocity_available
             ):
                 trajectory = None
             else:
                 elapsed_us = min(
-                    timestamp_us - self.identity.last_seen_us,
+                    timestamp_us - self.identity.last_observed_us,
                     self.config.maximum_trajectory_prediction_us,
                 )
                 elapsed_seconds = elapsed_us / 1_000_000
                 predicted_center = (
-                    last_center[0] + self.identity.velocity_x_px_per_s * elapsed_seconds,
-                    last_center[1] + self.identity.velocity_y_px_per_s * elapsed_seconds,
+                    last_center[0]
+                    + self.identity.last_observed_velocity_x_px_per_s * elapsed_seconds,
+                    last_center[1]
+                    + self.identity.last_observed_velocity_y_px_per_s * elapsed_seconds,
                 )
                 trajectory_distance = (
                     math.hypot(center[0] - predicted_center[0], center[1] - predicted_center[1])
                     / body_scale
                 )
                 trajectory = max(0.0, 1 - trajectory_distance / 2)
-            areas = (last.width_px * last.height_px, track.bbox.width_px * track.bbox.height_px)
+        # Scale/proportion deliberately remain anchored to trusted geometry. Recent
+        # SUSPECT observations improve only the motion/spatial proposal; they do
+        # not replace trusted identity validation evidence.
+        if trusted_last is None:
+            scale = proportion = None
+        else:
+            areas = (
+                trusted_last.width_px * trusted_last.height_px,
+                track.bbox.width_px * track.bbox.height_px,
+            )
             scale = min(areas) / max(areas)
             proportions = (
-                last.width_px / last.height_px,
+                trusted_last.width_px / trusted_last.height_px,
                 track.bbox.width_px / track.bbox.height_px,
             )
             proportion = min(proportions) / max(proportions)
@@ -195,6 +221,8 @@ class TargetIdentityManager:
         descriptors=None,
         pose_similarities=None,
     ):
+        # This is a current-frame diagnostic, never a carried-forward confidence.
+        self.identity.latest_identity_match_score = None
         viable = []
         for track in tracks:
             if track.state is TrackState.MISSING or track.detection_id is None:
@@ -215,15 +243,19 @@ class TargetIdentityManager:
                 (descriptors or {}).get(active.track_id),
                 (pose_similarities or {}).get(active.track_id),
             )
+            self.identity.latest_identity_match_score = match.fused_score
             self.identity.confidence = match.fused_score
-            self._remember(active, timestamp_us)
-            update_gallery(
-                self.identity.appearance_gallery,
-                (descriptors or {}).get(active.track_id),
-                quality=match.evidence.reliability,
-            )
             if match.fused_score < self.config.minimum_lock_score:
                 self.identity.state = TargetIdentityState.SUSPECT
+                self._old_track_id = self.identity.active_track_id
+                self._remember_observed(active, timestamp_us)
+            else:
+                self._remember_trusted(active, timestamp_us)
+                update_gallery(
+                    self.identity.appearance_gallery,
+                    (descriptors or {}).get(active.track_id),
+                    quality=match.evidence.reliability,
+                )
             return (match,)
         if self.identity.state is TargetIdentityState.SUSPECT and active is not None:
             candidate = next(candidate for track, candidate in viable if track is active)
@@ -234,10 +266,12 @@ class TargetIdentityManager:
                 (descriptors or {}).get(active.track_id),
                 (pose_similarities or {}).get(active.track_id),
             )
+            self.identity.latest_identity_match_score = match.fused_score
+            self._remember_observed(active, timestamp_us)
             if match.fused_score >= self.config.minimum_lock_score:
                 self.identity.state = TargetIdentityState.LOCKED
                 self.identity.confidence = match.fused_score
-                self._remember(active, timestamp_us)
+                self._remember_trusted(active, timestamp_us)
                 update_gallery(
                     self.identity.appearance_gallery,
                     (descriptors or {}).get(active.track_id),
@@ -248,8 +282,10 @@ class TargetIdentityManager:
             self.identity.state = TargetIdentityState.SUSPECT
             self._old_track_id = self.identity.active_track_id
             return ()
-        last_seen = self.identity.last_seen_us
-        missing_duration = timestamp_us - (last_seen if last_seen is not None else timestamp_us)
+        last_observed = self.identity.last_observed_us
+        missing_duration = timestamp_us - (
+            last_observed if last_observed is not None else timestamp_us
+        )
         if (
             self.identity.state is TargetIdentityState.SUSPECT
             and missing_duration <= self.config.suspect_timeout_us
@@ -281,6 +317,7 @@ class TargetIdentityManager:
             key=lambda item: (-item.fused_score, item.track_id),
         )
         best = matches[0]
+        self.identity.latest_identity_match_score = best.fused_score
         runner = matches[1].fused_score if len(matches) > 1 else None
         margin = best.fused_score - runner if runner is not None else best.fused_score
         if (
@@ -307,7 +344,7 @@ class TargetIdentityManager:
                 self.active_track_id_change_count += 1
             self.identity.active_track_id = best.track_id
             self.identity.state = TargetIdentityState.LOCKED
-            self._remember(track, timestamp_us)
+            self._remember_trusted(track, timestamp_us)
             self.relock_count += 1
             self.recovery_events.append(
                 RecoveryEvent(old, best.track_id, missing_duration, best.fused_score)
@@ -322,4 +359,7 @@ class TargetIdentityManager:
         data = asdict(self.identity)
         data["state"] = self.identity.state.value
         data["last_bbox"] = self.identity.last_bbox.to_dict() if self.identity.last_bbox else None
+        data["last_observed_bbox"] = (
+            self.identity.last_observed_bbox.to_dict() if self.identity.last_observed_bbox else None
+        )
         return data

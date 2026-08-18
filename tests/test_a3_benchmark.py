@@ -88,6 +88,12 @@ def test_target_benchmark_contract_pose_reduction_and_null_gt(monkeypatch) -> No
     assert report["tracking"]["track_fragmentation_count"] is None
     assert "track_fragments" not in report["tracking"]
     assert report["DEEP_REID_STATUS"] == "NOT_CONFIGURED"
+    scores = [
+        item["latest_identity_match_score"] for item in report["frame_observations"]
+    ]
+    assert any(score is None for score in scores)
+    assert any(score is not None for score in scores)
+    assert all("last_observed_age_us" in item for item in report["frame_observations"])
     json.dumps(report, allow_nan=False)
 
 

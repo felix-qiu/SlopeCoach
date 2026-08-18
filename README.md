@@ -333,6 +333,15 @@ frames. `LOST` without a current association fabricates neither bbox nor pose. T
 `raw_target_pose_debug` counts are non-semantic debug metadata; thresholds, feature registries, and
 analysis fingerprints are unchanged.
 
+Target Identity keeps two deliberately separate memories. Trusted `last_bbox/last_seen_us` and
+the HSV appearance gallery advance only after identity evidence meets the existing lock threshold.
+Observed continuity records the latest physically associated active-track bbox/timestamp/velocity,
+including `SUSPECT` frames, solely for motion proposals and for timing an actual association loss.
+Thus `OBSERVED != TRUSTED`: a fresh observation can keep the short missing timer current without
+creating a temporal segment or biomechanics. Debug observations/HUD expose a non-carried-forward
+`latest_identity_match_score` and `last_observed_age_us`; `null` means no match was calculated on
+that frame.
+
 Direct CLI equivalent:
 
 ```bash

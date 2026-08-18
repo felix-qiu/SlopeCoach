@@ -399,6 +399,13 @@ def benchmark_target_identity_frames(
             "active_track_id": manager.identity.active_track_id,
             "identity_state": state.value,
             "identity_confidence": manager.identity.confidence,
+            "latest_identity_match_score": manager.identity.latest_identity_match_score,
+            "last_observed_timestamp_us": manager.identity.last_observed_us,
+            "last_observed_age_us": (
+                sampled.timestamp_us - manager.identity.last_observed_us
+                if manager.identity.last_observed_us is not None
+                else None
+            ),
             "selected_bbox": (
                 selected_track.bbox.to_dict()
                 if selected_track is not None
