@@ -6,7 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 from slopecoach_ml.benchmark.biomechanics_debug import (
+    _angle_panel_values,
     _containing_turn,
+    _draw_angle_panel,
     _draw_pose_layer,
     _draw_raw_target_pose,
     _draw_temporal_skeleton,
@@ -32,6 +34,9 @@ class FakeCanvas:
     def __init__(self, marker=b"frame", shape=(480, 640, 3)):
         self.marker = marker
         self.shape = shape
+
+    def copy(self):
+        return FakeCanvas(self.marker, self.shape)
 
 
 class FakeWriter:
@@ -76,6 +81,9 @@ class FakeCV2:
 
     def rectangle(self, *args):
         self.rectangles.append(args)
+
+    def addWeighted(self, *_args):
+        return None
 
     def line(self, _canvas, start, end, color, thickness, line_type=None):
         self.lines.append((start, end, color, thickness, line_type))
@@ -327,6 +335,41 @@ def test_overlay_point_radius_scales_with_pose_height_and_is_bounded():
         )
         == 4
     )
+
+
+def test_angle_panel_values_use_screen_axes_and_existing_knee_facts():
+    joints = {
+        "left_shoulder": _joint("OBSERVED", stabilized=(100, 100)),
+        "right_shoulder": _joint("OBSERVED", stabilized=(200, 110)),
+        "left_hip": _joint("OBSERVED", stabilized=(110, 200)),
+        "right_hip": _joint("OBSERVED", stabilized=(210, 180)),
+    }
+    values = _angle_panel_values(
+        None,
+        joints,
+        {"left_knee_angle_2d_deg": 101.4, "right_knee_angle_2d_deg": 112.6},
+    )
+    assert values["Shoulder"] == pytest.approx(5.7106, abs=1e-4)
+    assert values["Hip"] == pytest.approx(-11.3099, abs=1e-4)
+    assert values["R Knee"] == 112.6
+    assert values["L Knee"] == 101.4
+    assert values["Angulation"] == pytest.approx(17.0205, abs=1e-4)
+
+
+def test_angle_panel_uses_raw_pose_and_preserves_missing_as_null():
+    raw = _raw_sample()
+    values = _angle_panel_values(raw, {}, {})
+    assert values["Shoulder"] is None
+    assert values["Hip"] is None
+    assert values["R Knee"] is None
+    assert values["L Knee"] is not None
+    assert values["Angulation"] is None
+
+    cv2 = FakeCV2()
+    _draw_angle_panel(cv2, FakeCanvas(), values)
+    assert "Angles (2D)" in cv2.texts
+    assert "--" in cv2.texts
+    assert any(text.endswith(" deg") for text in cv2.texts)
     assert (
         _overlay_point_radius(
             {
@@ -381,7 +424,8 @@ def test_overlay_video_metadata_and_timestamp_order(monkeypatch, tmp_path):
         fps=5,
     )
     assert cv2.writer.frames == [b"first", b"second"]
-    assert cv2.rectangles == []
+    assert len(cv2.rectangles) == 4  # filled panel plus border on each frame
+    assert all(rectangle[3] != (0, 255, 0) for rectangle in cv2.rectangles)
     assert metadata == {
         "path": str(tmp_path / "debug.mp4"),
         "kind": "SAMPLED_DEBUG_VIDEO",
@@ -454,7 +498,8 @@ def test_manual_suspect_overlay_shows_raw_bbox_and_debug_gate_without_rerun(
         "analysis_gated_raw_pose_frame_count": 1,
         "trusted_stabilized_pose_frame_count": 0,
     }
-    assert len(cv2.rectangles) == 1
+    assert len(cv2.rectangles) == 3  # target bbox plus panel fill and border
+    assert sum(rectangle[3] == (0, 255, 0) for rectangle in cv2.rectangles) == 1
     assert len(cv2.lines) == 2
     assert any("target_source=MANUAL_SEED" in text for text in cv2.texts)
     assert any("match_score=0.47 observed_age_ms=0" in text for text in cv2.texts)

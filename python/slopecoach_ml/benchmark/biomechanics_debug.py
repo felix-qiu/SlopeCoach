@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -215,6 +216,11 @@ def write_biomechanics_overlay_video(
             signal = signal_by_timestamp.get(sample["timestamp_us"])
             turn = _containing_turn(turns, sample["timestamp_us"])
             facts = facts_by_timestamp.get(sample["timestamp_us"], {})
+            _draw_angle_panel(
+                cv2,
+                canvas,
+                _angle_panel_values(raw, sample.get("joints", {}), facts),
+            )
             _draw_hud(
                 cv2,
                 canvas,
@@ -388,6 +394,130 @@ def _point(point: dict[str, Any], prefix: str):
     return round(x), round(y)
 
 
+def _angle_panel_values(
+    raw_sample: Any, joints: dict[str, Any], facts: dict[str, Any]
+) -> dict[str, float | None]:
+    stable_points = {
+        joint_name: stable
+        for joint_name, point in joints.items()
+        if joint_name in _BODY_OVERLAY_JOINTS
+        and isinstance(point, dict)
+        and (stable := _point(point, "stabilized")) is not None
+    }
+    points = stable_points or _raw_pose_points(raw_sample)
+    shoulder = _axis_angle(points, Joint.LEFT_SHOULDER, Joint.RIGHT_SHOULDER)
+    hip = _axis_angle(points, Joint.LEFT_HIP, Joint.RIGHT_HIP)
+    left_knee = _finite_fact(facts.get("left_knee_angle_2d_deg"))
+    right_knee = _finite_fact(facts.get("right_knee_angle_2d_deg"))
+    if left_knee is None:
+        left_knee = _three_point_angle(points, Joint.LEFT_HIP, Joint.LEFT_KNEE, Joint.LEFT_ANKLE)
+    if right_knee is None:
+        right_knee = _three_point_angle(
+            points, Joint.RIGHT_HIP, Joint.RIGHT_KNEE, Joint.RIGHT_ANKLE
+        )
+    angulation = (
+        _normalize_axis_angle(shoulder - hip) if shoulder is not None and hip is not None else None
+    )
+    return {
+        "Shoulder": shoulder,
+        "Hip": hip,
+        "R Knee": right_knee,
+        "L Knee": left_knee,
+        "Angulation": angulation,
+    }
+
+
+def _finite_fact(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) and math.isfinite(value) else None
+
+
+def _axis_angle(points: dict[str, tuple[int, int]], first: Joint, second: Joint) -> float | None:
+    start, end = points.get(first.value), points.get(second.value)
+    if start is None or end is None or start == end:
+        return None
+    return _normalize_axis_angle(math.degrees(math.atan2(end[1] - start[1], end[0] - start[0])))
+
+
+def _normalize_axis_angle(value: float) -> float:
+    while value > 90:
+        value -= 180
+    while value <= -90:
+        value += 180
+    return value
+
+
+def _three_point_angle(
+    points: dict[str, tuple[int, int]], first: Joint, vertex: Joint, third: Joint
+) -> float | None:
+    a, b, c = points.get(first.value), points.get(vertex.value), points.get(third.value)
+    if a is None or b is None or c is None:
+        return None
+    first_vector = (a[0] - b[0], a[1] - b[1])
+    second_vector = (c[0] - b[0], c[1] - b[1])
+    first_length = math.hypot(*first_vector)
+    second_length = math.hypot(*second_vector)
+    if first_length == 0 or second_length == 0:
+        return None
+    cosine = sum(x * y for x, y in zip(first_vector, second_vector, strict=True)) / (
+        first_length * second_length
+    )
+    return math.degrees(math.acos(max(-1.0, min(1.0, cosine))))
+
+
+def _draw_angle_panel(cv2: Any, canvas: Any, values: dict[str, float | None]) -> None:
+    left, top, width, height = 12, 12, 260, 190
+    overlay = canvas.copy()
+    cv2.rectangle(
+        overlay,
+        (left, top),
+        (left + width, top + height),
+        (8, 8, 8),
+        -1,
+        cv2.LINE_AA,
+    )
+    cv2.addWeighted(overlay, 0.72, canvas, 0.28, 0, canvas)
+    cv2.rectangle(
+        canvas,
+        (left, top),
+        (left + width, top + height),
+        (130, 130, 130),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        canvas,
+        "Angles (2D)",
+        (left + 18, top + 31),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.72,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    for row, (label, value) in enumerate(values.items()):
+        baseline = top + 62 + row * 27
+        cv2.putText(
+            canvas,
+            label,
+            (left + 18, baseline),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (215, 215, 215),
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            canvas,
+            _fmt_panel_angle(value),
+            (left + 176, baseline),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+
 def _containing_turn(turns: list[dict[str, Any]], timestamp_us: int):
     for turn in turns:
         start = turn.get("start_timestamp_us")
@@ -441,7 +571,7 @@ def _draw_hud(
         cv2.putText(
             canvas,
             label,
-            (10, 22 + 20 * row),
+            (10, 224 + 20 * row),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.46,
             (255, 255, 255),
@@ -455,3 +585,7 @@ def _fmt(value):
 
 def _fmt_us_ms(value):
     return "null" if value is None else f"{value / 1000:.0f}"
+
+
+def _fmt_panel_angle(value: float | None) -> str:
+    return "--" if value is None else f"{value:.0f} deg"
