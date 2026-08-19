@@ -615,9 +615,24 @@ poses only the active target, and uncertain states suppress target biomechanics.
 correction remains deferred. The optional A5 manual target seed is initialization provenance only,
 not correction, unconditional Track ID pinning, or Ground Truth. After initialization, a viable
 active target track receives first claim on its best geometric association only when the configured
-preferred-association threshold is met. Weak associations still follow normal global competition;
-the benchmark reports both preferred associations and cases where ownership prevented a duplicate
-track from stealing the target detection.
+preferred-association threshold is met. Preferred ownership is not unconditional: it may override
+a stronger track only when the two pre-assignment track histories are duplicate-like under the
+configured bbox IoU, normalized center-distance, scale-ratio, and available velocity-direction
+checks. A stronger non-duplicate competitor keeps normal global priority, so the target may become
+`MISSING`, `SUSPECT`, or `LOST` instead of silently attaching to another person. Lost is safer than
+Wrong Target. These are conservative research defaults, not validated tracking-accuracy claims.
+The benchmark reports preferred conflicts, accepted duplicate overrides, and rejected
+non-duplicate overrides without presenting any of them as Ground Truth wrong-target metrics.
+The provisional duplicate-like gate uses only the two tracks' pre-assignment state: prior bbox
+IoU must be at least `0.55`, center distance divided by the larger prior bbox diagonal must be at
+most `0.25`, and prior bbox area ratio must be at most `2.0`. When both tracks have measured
+non-zero velocity, their velocity cosine must be at least `0.50`. All four defaults live in
+`TrackingConfig`, are validated, and are serialized into benchmark provenance.
+`preferred_association_conflict_count` counts qualifying preferred pairs that face a stronger
+competitor for the same detection. `preferred_association_override_count` counts the subset that
+actually win after passing the duplicate-like gate, while
+`preferred_association_rejected_non_duplicate_count` counts pairs denied that privilege by the
+gate. These are deterministic research diagnostics, not wrong-target accuracy metrics.
 
 All A3.1 thresholds are centralized, validated, serialized into benchmark provenance, and labeled
 research defaults; they are conservative provisional defaults, not scientifically validated

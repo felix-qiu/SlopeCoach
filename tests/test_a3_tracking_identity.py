@@ -146,17 +146,23 @@ def test_tracker_crossing_is_deterministic_not_detection_order_based() -> None:
     )
 
 
-def test_tracker_reserves_qualifying_detection_for_preferred_target_track() -> None:
+@pytest.mark.parametrize("reverse_detection_order", [False, True])
+def test_tracker_reserves_qualifying_detection_for_preferred_target_track(
+    reverse_detection_order,
+) -> None:
     geometry = FrameGeometry(720, 1280)
     tracker = ReferenceMotionIoUTracker()
     # RTMDet can emit two differently sized boxes for one crouched skier. The
     # narrower duplicate has a better geometric score on the following frame,
     # but must not steal the manually selected target's sole detection.
+    initial_detections = [
+        Detection(1, BoundingBox2D(447.7, 405.8, 59.4, 64.7), 0.33),
+        Detection(2, BoundingBox2D(448.2, 406.8, 37.8, 60.9), 0.60),
+    ]
+    if reverse_detection_order:
+        initial_detections.reverse()
     first = tracker.update(
-        (
-            Detection(1, BoundingBox2D(447.7, 405.8, 59.4, 64.7), 0.33),
-            Detection(2, BoundingBox2D(448.2, 406.8, 37.8, 60.9), 0.60),
-        ),
+        tuple(initial_detections),
         0,
         0,
         geometry,
@@ -183,6 +189,8 @@ def test_tracker_reserves_qualifying_detection_for_preferred_target_track() -> N
     assert duplicate.state is TrackState.MISSING
     assert tracker.preferred_association_count == 1
     assert tracker.preferred_association_override_count == 1
+    assert tracker.preferred_association_conflict_count == 1
+    assert tracker.preferred_association_rejected_non_duplicate_count == 0
 
 
 def test_tracker_does_not_force_weak_preferred_association() -> None:
@@ -205,6 +213,121 @@ def test_tracker_does_not_force_weak_preferred_association() -> None:
     matched = next(item for item in result.tracks if item.detection_id == 3)
     assert matched.track_id == 2
     assert tracker.preferred_association_count == 0
+    assert tracker.preferred_association_conflict_count == 0
+    assert tracker.preferred_association_override_count == 0
+    assert tracker.preferred_association_rejected_non_duplicate_count == 0
+
+
+def test_stronger_non_duplicate_track_keeps_its_detection() -> None:
+    tracker = ReferenceMotionIoUTracker()
+    tracker.update((detection(100, 100), detection(200, 260)), 0, 0, GEOMETRY)
+    tracker.update(
+        (detection(101, 140), detection(201, 240)),
+        200_000,
+        1,
+        GEOMETRY,
+        preferred_track_id=1,
+    )
+
+    bystander = detection(202, 220)
+    preferred_score = tracker._score(tracker._tracks[1], bystander, 400_000)
+    bystander_score = tracker._score(tracker._tracks[2], bystander, 400_000)
+    assert preferred_score is not None
+    assert preferred_score >= tracker.config.minimum_preferred_association_score
+    assert bystander_score is not None and bystander_score > preferred_score
+
+    result = tracker.update((bystander,), 400_000, 2, GEOMETRY, preferred_track_id=1)
+    target = next(item for item in result.tracks if item.track_id == 1)
+    owner = next(item for item in result.tracks if item.track_id == 2)
+    # Continuity is optional; correct physical identity is mandatory.
+    assert target.detection_id is None
+    assert target.state is TrackState.MISSING
+    assert owner.detection_id == 202
+    assert tracker.preferred_association_conflict_count == 1
+    assert tracker.preferred_association_override_count == 0
+    assert tracker.preferred_association_rejected_non_duplicate_count == 1
+
+
+def test_two_person_crossing_never_maps_target_track_to_bystander() -> None:
+    target_detection_ids = {100, 101, 102, 103}
+    bystander_detection_ids = {200, 201, 202, 203}
+    tracker = ReferenceMotionIoUTracker()
+    positions = ((200, 600), (300, 500), (390, 410), (500, 300))
+
+    for frame_index, (target_x, bystander_x) in enumerate(positions):
+        result = tracker.update(
+            (
+                detection(100 + frame_index, target_x),
+                detection(200 + frame_index, bystander_x),
+            ),
+            frame_index * 500_000,
+            frame_index,
+            GEOMETRY,
+            preferred_track_id=1 if frame_index else None,
+        )
+        target = next(item for item in result.tracks if item.track_id == 1)
+        assert target.detection_id in target_detection_ids | {None}
+        assert target.detection_id not in bystander_detection_ids
+
+
+def test_target_disappearance_and_short_occlusion_do_not_absorb_bystander() -> None:
+    tracker = ReferenceMotionIoUTracker()
+    sequence = (
+        (0, (detection(100, 100), detection(200, 260))),
+        (200_000, (detection(101, 140), detection(201, 240))),
+        (400_000, (detection(202, 220),)),
+        (600_000, (detection(203, 200),)),
+        (800_000, (detection(104, 260), detection(204, 180))),
+    )
+    bystander_detection_ids = {200, 201, 202, 203, 204}
+    target_observations = []
+    for frame_index, (timestamp_us, detections) in enumerate(sequence):
+        result = tracker.update(
+            detections,
+            timestamp_us,
+            frame_index,
+            GEOMETRY,
+            preferred_track_id=1 if frame_index else None,
+        )
+        target = next(item for item in result.tracks if item.track_id == 1)
+        target_observations.append(target)
+        assert target.detection_id not in bystander_detection_ids
+
+    assert [item.state for item in target_observations[2:4]] == [
+        TrackState.MISSING,
+        TrackState.MISSING,
+    ]
+    assert target_observations[-1].detection_id == 104
+    assert target_observations[-1].state is TrackState.CONFIRMED
+
+
+def test_duplicate_gate_and_diagnostics_are_detection_order_independent() -> None:
+    outcomes = []
+    for reverse_order in (False, True):
+        tracker = ReferenceMotionIoUTracker()
+        first = [detection(100, 100), detection(200, 260)]
+        second = [detection(101, 140), detection(201, 240)]
+        if reverse_order:
+            first.reverse()
+            second.reverse()
+        tracker.update(tuple(first), 0, 0, GEOMETRY)
+        tracker.update(tuple(second), 200_000, 1, GEOMETRY, preferred_track_id=1)
+        result = tracker.update(
+            (detection(202, 220),),
+            400_000,
+            2,
+            GEOMETRY,
+            preferred_track_id=1,
+        )
+        outcomes.append(
+            (
+                tuple((item.track_id, item.detection_id) for item in result.tracks),
+                tracker.preferred_association_conflict_count,
+                tracker.preferred_association_override_count,
+                tracker.preferred_association_rejected_non_duplicate_count,
+            )
+        )
+    assert outcomes[0] == outcomes[1]
 
 
 def test_tracker_rejects_preferred_threshold_below_general_threshold() -> None:
@@ -213,6 +336,31 @@ def test_tracker_rejects_preferred_threshold_below_general_threshold() -> None:
             minimum_association_score=0.40,
             minimum_preferred_association_score=0.39,
         ).validate()
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("duplicate_track_minimum_iou", float("nan")),
+        ("duplicate_track_minimum_iou", 1.01),
+        ("duplicate_track_maximum_normalized_center_distance", -0.01),
+        ("duplicate_track_maximum_normalized_center_distance", float("inf")),
+        ("duplicate_track_maximum_scale_ratio", 0.99),
+        ("duplicate_track_minimum_velocity_cosine", -1.01),
+        ("duplicate_track_minimum_velocity_cosine", float("nan")),
+    ],
+)
+def test_duplicate_track_threshold_validation(name, value) -> None:
+    with pytest.raises(ValueError):
+        TrackingConfig(**{name: value}).validate()
+
+
+def test_duplicate_track_thresholds_are_serialized() -> None:
+    rendered = TrackingConfig().to_dict()
+    assert rendered["duplicate_track_minimum_iou"] == 0.55
+    assert rendered["duplicate_track_maximum_normalized_center_distance"] == 0.25
+    assert rendered["duplicate_track_maximum_scale_ratio"] == 2.0
+    assert rendered["duplicate_track_minimum_velocity_cosine"] == 0.50
 
 
 def test_initial_selector_temporal_motion_beats_static_background() -> None:
@@ -378,6 +526,46 @@ def test_target_and_track_identity_are_structurally_distinct_and_relock_new_trac
     assert manager.identity.state is TargetIdentityState.LOCKED
     assert manager.identity.active_track_id == 12
     assert manager.identity.target_id == "filmed-skier"
+    assert manager.relock_count == 1
+
+
+def test_new_track_recovery_rejects_bystander_and_confirms_returning_target() -> None:
+    manager = TargetIdentityManager(
+        TargetIdentityConfig(
+            suspect_timeout_us=100_000,
+            lost_timeout_us=300_000,
+            recovery_confirmation_observations=2,
+        )
+    )
+    original = track(7, 300)
+    manager.initialize(original, 0.9, 0, descriptor=(1, 0))
+
+    for timestamp_us in (150_000, 300_001, 400_000):
+        bystander = track(8, 650, timestamp=timestamp_us)
+        manager.update(
+            (bystander,),
+            {8: candidate(bystander)},
+            timestamp_us,
+            descriptors={8: (0, 1)},
+        )
+        assert manager.identity.active_track_id != 8
+    assert manager.identity.state is TargetIdentityState.LOST
+
+    for timestamp_us, expected_state in (
+        (500_000, TargetIdentityState.RECOVERING),
+        (600_000, TargetIdentityState.LOCKED),
+    ):
+        bystander = track(8, 650, timestamp=timestamp_us)
+        returning_target = track(12, 305, timestamp=timestamp_us)
+        manager.update(
+            (bystander, returning_target),
+            {8: candidate(bystander), 12: candidate(returning_target)},
+            timestamp_us,
+            descriptors={8: (0, 1), 12: (1, 0)},
+        )
+        assert manager.identity.state is expected_state
+        assert manager.identity.active_track_id != 8
+    assert manager.identity.active_track_id == 12
     assert manager.relock_count == 1
 
 

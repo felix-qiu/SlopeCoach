@@ -28,6 +28,10 @@ class TrackingConfig:
     association_scale_weight: float = 0.15
     minimum_association_score: float = 0.25
     minimum_preferred_association_score: float = 0.45
+    duplicate_track_minimum_iou: float = 0.55
+    duplicate_track_maximum_normalized_center_distance: float = 0.25
+    duplicate_track_maximum_scale_ratio: float = 2.0
+    duplicate_track_minimum_velocity_cosine: float = 0.50
     confirmation_hits: int = 2
     maximum_missed_duration_us: int = 1_500_000
 
@@ -39,12 +43,25 @@ class TrackingConfig:
             "association_scale_weight",
             "minimum_association_score",
             "minimum_preferred_association_score",
+            "duplicate_track_minimum_iou",
         ):
             value = getattr(self, name)
             if not math.isfinite(value) or not 0 <= value <= 1:
                 raise ValueError(f"{name} must be finite and in [0, 1]")
         if self.maximum_normalized_center_distance <= 0 or self.maximum_scale_ratio < 1:
             raise ValueError("tracking distance/scale limits are invalid")
+        if (
+            not math.isfinite(self.duplicate_track_maximum_normalized_center_distance)
+            or self.duplicate_track_maximum_normalized_center_distance < 0
+            or not math.isfinite(self.duplicate_track_maximum_scale_ratio)
+            or self.duplicate_track_maximum_scale_ratio < 1
+        ):
+            raise ValueError("duplicate-track geometry limits are invalid")
+        if (
+            not math.isfinite(self.duplicate_track_minimum_velocity_cosine)
+            or not -1 <= self.duplicate_track_minimum_velocity_cosine <= 1
+        ):
+            raise ValueError("duplicate-track velocity cosine must be in [-1, 1]")
         if self.minimum_preferred_association_score < self.minimum_association_score:
             raise ValueError(
                 "preferred association score must be at least the general association score"

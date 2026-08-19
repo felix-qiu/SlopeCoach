@@ -503,6 +503,10 @@ def benchmark_target_identity_frames(
             "terminated_track_count": tracker.total_tracks_terminated,
             "preferred_association_count": tracker.preferred_association_count,
             "preferred_association_override_count": (tracker.preferred_association_override_count),
+            "preferred_association_conflict_count": (tracker.preferred_association_conflict_count),
+            "preferred_association_rejected_non_duplicate_count": (
+                tracker.preferred_association_rejected_non_duplicate_count
+            ),
             "track_fragmentation_gt_status": "NOT_AVAILABLE",
             "track_fragmentation_count": None,
             "active_track_count_mean": mean(active_track_counts) if active_track_counts else None,

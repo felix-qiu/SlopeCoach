@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from slopecoach_ml.benchmark import benchmark_target_identity_frames
 from slopecoach_ml.detection import Detection
-from slopecoach_ml.identity import InitialTargetSelectorConfig
+from slopecoach_ml.identity import InitialTargetSelectorConfig, ManualTargetSeed
 from slopecoach_ml.pose import BoundingBox2D, FrameGeometry, MMPoseRTMWPoseProvider
 from slopecoach_ml.video import SampledFrame
 
@@ -18,6 +18,23 @@ class Detector:
         return (
             Detection(0, BoundingBox2D(x, 100, 120, 240), 0.95),
             Detection(1, BoundingBox2D(10, 10, 4, 8), 0.2),
+        )
+
+
+class CrossingDetector:
+    name = "synthetic-crossing-detector"
+    sequence = (
+        ((100, 100), (200, 260)),
+        ((101, 140), (201, 240)),
+        ((202, 220),),
+        ((203, 200),),
+        ((104, 260), (204, 180)),
+    )
+
+    def detect(self, image, geometry):
+        return tuple(
+            Detection(detection_id, BoundingBox2D(x, 100, 100, 200), 0.9)
+            for detection_id, x in self.sequence[image]
         )
 
 
@@ -94,6 +111,64 @@ def test_target_benchmark_contract_pose_reduction_and_null_gt(monkeypatch) -> No
     assert any(score is None for score in scores)
     assert any(score is not None for score in scores)
     assert all("last_observed_age_us" in item for item in report["frame_observations"])
+    json.dumps(report, allow_nan=False)
+
+
+def test_benchmark_wrong_person_never_enters_trusted_target_path(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "slopecoach_ml.benchmark.target_identity.inspect_video",
+        lambda path: type(
+            "Metadata", (), {"to_dict": lambda self: {"path": str(path)}}
+        )(),
+    )
+    geometry = FrameGeometry(1000, 600)
+    frames = [SampledFrame(i, i * 200_000, geometry, i) for i in range(5)]
+    observed = []
+    report = benchmark_target_identity_frames(
+        input_path="missing.mp4",
+        frames=frames,
+        detector=CrossingDetector(),
+        pose_provider=MMPoseRTMWPoseProvider(PoseBackend()),
+        detector_model={"model_id": "det"},
+        pose_model={"model_id": "pose"},
+        sample_fps=5,
+        manual_target_seed=ManualTargetSeed(0.0, 150, 150),
+        appearance_encoder=Appearance(),
+        frame_observer=lambda frame, observation, pose: observed.append(
+            (observation, pose)
+        ),
+        clock=Clock(),
+    )
+
+    assert report["manual_target_seed"]["selected_detection_id"] == 100
+    bystander_ids = {200, 201, 202, 203, 204}
+    for observation, _pose_frame in observed:
+        active_track_id = observation["active_track_id"]
+        active_detection_id = next(
+            (
+                item["detection_id"]
+                for item in observation["tracks"]
+                if item["track_id"] == active_track_id
+            ),
+            None,
+        )
+        if observation["target_pose_available"]:
+            assert active_detection_id not in bystander_ids
+
+    occluded = [observed[index][0] for index in (2, 3)]
+    assert all(item["identity_state"] == "SUSPECT" for item in occluded)
+    assert all(not item["target_pose_available"] for item in occluded)
+    assert all(item["left_knee_angle_2d_degrees"] is None for item in occluded)
+    assert all("TARGET_IDENTITY_UNCERTAIN" in item["limitations"] for item in occluded)
+    # B may be pose-probed for identity recovery, but is never emitted as A's target pose.
+    assert [
+        [person.detection_id for person in observed[index][1].persons]
+        for index in (2, 3)
+    ] == [[202], [203]]
+    assert report["tracking"]["preferred_association_conflict_count"] >= 1
+    assert report["tracking"]["preferred_association_override_count"] == 0
+    assert report["tracking"]["preferred_association_rejected_non_duplicate_count"] >= 1
+    assert report["identity_accuracy"]["wrong_target_rate"] is None
     json.dumps(report, allow_nan=False)
 
 

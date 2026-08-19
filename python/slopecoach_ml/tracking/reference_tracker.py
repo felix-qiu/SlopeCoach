@@ -23,6 +23,37 @@ def _center(box: BoundingBox2D) -> tuple[float, float]:
     return box.x_px + box.width_px / 2, box.y_px + box.height_px / 2
 
 
+def _duplicate_like_conflict(
+    first: _MutableTrack, second: _MutableTrack, config: TrackingConfig
+) -> bool:
+    """Use only pre-assignment track history to recognize same-person duplicates."""
+    first_center, second_center = _center(first.bbox), _center(second.bbox)
+    body_scale = max(
+        1.0,
+        math.hypot(first.bbox.width_px, first.bbox.height_px),
+        math.hypot(second.bbox.width_px, second.bbox.height_px),
+    )
+    center_distance = math.dist(first_center, second_center) / body_scale
+    first_area = first.bbox.width_px * first.bbox.height_px
+    second_area = second.bbox.width_px * second.bbox.height_px
+    scale_ratio = max(first_area, second_area) / min(first_area, second_area)
+    if (
+        bbox_iou(first.bbox, second.bbox) < config.duplicate_track_minimum_iou
+        or center_distance > config.duplicate_track_maximum_normalized_center_distance
+        or scale_ratio > config.duplicate_track_maximum_scale_ratio
+    ):
+        return False
+    first_speed = math.hypot(first.velocity_x, first.velocity_y)
+    second_speed = math.hypot(second.velocity_x, second.velocity_y)
+    if first.hit_count >= 2 and second.hit_count >= 2 and first_speed > 0 and second_speed > 0:
+        velocity_cosine = (
+            first.velocity_x * second.velocity_x + first.velocity_y * second.velocity_y
+        ) / (first_speed * second_speed)
+        if velocity_cosine < config.duplicate_track_minimum_velocity_cosine:
+            return False
+    return True
+
+
 @dataclass
 class _MutableTrack:
     track_id: int
@@ -50,6 +81,8 @@ class ReferenceMotionIoUTracker:
         self.total_tracks_terminated = 0
         self.preferred_association_count = 0
         self.preferred_association_override_count = 0
+        self.preferred_association_conflict_count = 0
+        self.preferred_association_rejected_non_duplicate_count = 0
 
     def _score(self, track: _MutableTrack, detection: Detection, timestamp_us: int) -> float | None:
         elapsed = max(0, timestamp_us - track.last_seen_us) / 1_000_000
@@ -109,29 +142,55 @@ class ReferenceMotionIoUTracker:
         matched_tracks: set[int] = set()
         matched_detections: set[int] = set()
 
+        preferred_decisions: dict[tuple[int, int], str] = {}
+        for negative_score, track_id, index in pairs:
+            if (
+                track_id != preferred_track_id
+                or -negative_score < self.config.minimum_preferred_association_score
+            ):
+                continue
+            stronger = [
+                (other_negative_score, other_track_id)
+                for other_negative_score, other_track_id, other_index in pairs
+                if other_index == index
+                and other_track_id != track_id
+                and other_negative_score < negative_score
+            ]
+            if not stronger:
+                preferred_decisions[(track_id, index)] = "NO_STRONGER_COMPETITOR"
+                continue
+            self.preferred_association_conflict_count += 1
+            preferred_track = self._tracks[track_id]
+            duplicate_like = all(
+                _duplicate_like_conflict(preferred_track, self._tracks[other_track_id], self.config)
+                for _, other_track_id in stronger
+            )
+            if duplicate_like:
+                preferred_decisions[(track_id, index)] = "DUPLICATE_OVERRIDE"
+            else:
+                # Continuity is optional; correct physical identity is mandatory.
+                preferred_decisions[(track_id, index)] = "REJECTED_NON_DUPLICATE"
+                self.preferred_association_rejected_non_duplicate_count += 1
+
         def association_order(pair: tuple[float, int, int]) -> tuple[bool, float, int, int]:
             negative_score, track_id, index = pair
-            preferred = (
-                track_id == preferred_track_id
-                and -negative_score >= self.config.minimum_preferred_association_score
-            )
+            preferred = preferred_decisions.get((track_id, index)) in {
+                "NO_STRONGER_COMPETITOR",
+                "DUPLICATE_OVERRIDE",
+            }
             return (not preferred, negative_score, track_id, index)
 
-        for negative_score, track_id, index in sorted(pairs, key=association_order):
+        for _negative_score, track_id, index in sorted(pairs, key=association_order):
             if track_id in matched_tracks or index in matched_detections:
                 continue
-            preferred = (
-                track_id == preferred_track_id
-                and -negative_score >= self.config.minimum_preferred_association_score
-            )
+            preferred_decision = preferred_decisions.get((track_id, index))
+            preferred = preferred_decision in {
+                "NO_STRONGER_COMPETITOR",
+                "DUPLICATE_OVERRIDE",
+            }
             if preferred:
                 self.preferred_association_count += 1
-                if any(
-                    other_index == index
-                    and other_track_id != track_id
-                    and other_negative_score < negative_score
-                    for other_negative_score, other_track_id, other_index in pairs
-                ):
+                if preferred_decision == "DUPLICATE_OVERRIDE":
                     self.preferred_association_override_count += 1
             track, detection = self._tracks[track_id], ordered[index]
             elapsed = (timestamp_us - track.last_seen_us) / 1_000_000
