@@ -20,6 +20,7 @@ from slopecoach_ml.sport_type import (
     SportEvidenceScope,
     SportType,
     SportTypeResolutionStatus,
+    SportTypeRoutingBasis,
     TargetSportFrameContext,
     VisualSportEvidenceConfig,
     VisualSportScores,
@@ -120,7 +121,8 @@ def test_cross_primary_agreement_conflict_and_weak_equipment_math():
     ]
     agreed = ReferenceSportTypeFusion().decide(agreeing)
     assert agreed.sport_type is SportType.SNOWBOARD
-    assert math.isclose(agreed.snowboard_support, (0.60 + 0.8 * 0.90) / 1.8)
+    assert agreed.routing_basis is SportTypeRoutingBasis.VISUAL_FALLBACK
+    assert math.isclose(agreed.snowboard_support, 0.90)
 
     conflicting = [
         observation(f"ce{t}", SportEvidenceKind.EQUIPMENT, 0.90, 0.02, t)
@@ -130,8 +132,8 @@ def test_cross_primary_agreement_conflict_and_weak_equipment_math():
         for t in (0, 1)
     ]
     conflict = ReferenceSportTypeFusion().decide(conflicting)
-    assert conflict.sport_type is SportType.UNKNOWN
-    assert conflict.status is SportTypeResolutionStatus.CONFLICTING_PRIMARY_EVIDENCE
+    assert conflict.sport_type is SportType.SKI
+    assert conflict.routing_basis is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
 
     weak = [
         observation(f"we{t}", SportEvidenceKind.EQUIPMENT, 0.02, 0.40, t)
@@ -141,12 +143,9 @@ def test_cross_primary_agreement_conflict_and_weak_equipment_math():
         for t in (0, 1)
     ]
     weak_decision = ReferenceSportTypeFusion().decide(weak)
-    expected = (0.40 + 0.8 * 0.90) / 1.8
-    assert math.isclose(weak_decision.snowboard_support, expected)
-    assert weak_decision.sport_type is SportType.UNKNOWN
-    assert (
-        weak_decision.status is SportTypeResolutionStatus.INSUFFICIENT_PRIMARY_EVIDENCE
-    )
+    assert math.isclose(weak_decision.snowboard_support, 0.90)
+    assert weak_decision.sport_type is SportType.SNOWBOARD
+    assert weak_decision.routing_basis is SportTypeRoutingBasis.VISUAL_FALLBACK
 
 
 def test_visual_failure_isolated_from_other_provider():

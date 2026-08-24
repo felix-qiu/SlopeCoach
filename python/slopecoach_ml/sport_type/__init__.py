@@ -9,6 +9,7 @@ from .contracts import (
     SPORT_TYPE_CONFIG_PROFILE,
     SPORT_TYPE_CONTRACT_VERSION,
     SPORT_TYPE_REQUIRED_REASON,
+    SPORT_TYPE_ROUTING_POLICY,
     AutoSportTypeDecision,
     SportCueMeasurement,
     SportCueStatus,
@@ -21,6 +22,7 @@ from .contracts import (
     SportTypeConfig,
     SportTypeResolutionStatus,
     SportTypeResult,
+    SportTypeRoutingBasis,
     SportTypeSource,
 )
 from .cues import extract_uncalibrated_sport_cues
@@ -79,6 +81,7 @@ __all__ = [
     "SPORT_TYPE_CONTRACT_VERSION",
     "SPORT_TYPE_CONFIG_PROFILE",
     "SPORT_TYPE_REQUIRED_REASON",
+    "SPORT_TYPE_ROUTING_POLICY",
     "SPORT_EVIDENCE_CALIBRATION_CONTRACT_VERSION",
     "SPORT_TYPE_CALIBRATION_DATASET_VERSION",
     "SPORT_TYPE_GT_CONTRACT_VERSION",
@@ -106,6 +109,7 @@ __all__ = [
     "SportTypeConfig",
     "SportTypeResolutionStatus",
     "SportTypeResult",
+    "SportTypeRoutingBasis",
     "SportTypeSource",
     "TargetSportFrameContext",
     "VISUAL_CONFIG_PROFILE",

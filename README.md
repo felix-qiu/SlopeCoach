@@ -42,6 +42,7 @@ python/slopecoach_ml/       Research/reference package
   scoring/                  Structure-only nullable scorecard and diagnosis-dimension mapping
   coach/                    Top-two issues, controlled drills and deterministic zh-CN templates
   analysis_result/          Unified machine result and pure app-facing report projection
+  product/                  Explicit-user MVP request boundary; no automatic SportType inference
   reference/                Provisional ReferenceAnalysisResult pipeline
   benchmark/                SkiBench reference harness
   cli/                      Command-line interface
@@ -113,6 +114,8 @@ uv run --project python python -m slopecoach_ml.cli coach-golden
 uv run --project python python -m slopecoach_ml.cli benchmark-scoring-coach /path/to/a7.json
 uv run --project python python -m slopecoach_ml.cli analysis-result-golden
 uv run --project python python -m slopecoach_ml.cli benchmark-analysis-result /path/to/a7.json
+uv run --project python python -m slopecoach_ml.cli analyze-video /path/to/video.mp4 \
+  --sport-type SKI --input-non-mirrored --output artifacts/local/mvp_analysis.json
 uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
   --visual-checkpoint artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
@@ -120,6 +123,30 @@ uv run --project python python -m slopecoach_ml.cli sport-visual-doctor \
 All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an artifact.
 Invalid inputs return a non-zero exit code. Exceptions are reported rather than converted into
 fake success.
+
+## MVP product SportType decision
+
+The product `analyze-video` request requires an explicit user selection. The only accepted
+values are `SKI` (双板) and `SNOWBOARD` (单板); omission and `AUTO` are command errors. This user
+selection is product truth and enters the analysis directly with:
+
+```text
+effective_sport_type = SKI | SNOWBOARD
+effective_source = USER
+resolution_status = RESOLVED_USER
+```
+
+The MVP command reuses the configured person detector, pose provider, target/temporal pipeline,
+and biomechanics benchmark pass. It does **not** construct the A6 Equipment or CLIP providers,
+run `ReferenceSportTypeFusion` or calibrated fusion, load the CLIP checkpoint, or perform extra
+equipment inference. Its artifact records `automatic_sport_type_research.executed=false` and
+`status=DEFERRED_RESEARCH_ONLY`.
+
+`benchmark-sport-type` remains a separate research command and retains AUTO, RTMDet equipment,
+CLIP visual evidence, hierarchical reference fusion, calibration diagnostics, Goldens, and
+benchmarks. Those A6 capabilities are preserved for research but do not execute in the MVP
+product request path. The Python `analyze-video` artifact is still a provisional MVP/reference
+artifact, not the future Rust production Domain Kernel contract.
 
 ## A9 end-to-end product contract
 
@@ -386,8 +413,9 @@ path and output shape.
 
 ## A6.3 SportType calibration research
 
-A6.3 does not change `ReferenceSportTypeFusion`, its weights, or its thresholds. RAW_V1 remains
-the effective AUTO routing path and `CALIBRATED_FUSION_CONTROLS_ROUTING = false`. The separate
+A6.3 calibration does not control `ReferenceSportTypeFusion`, its weights, or its thresholds. The
+current uncalibrated hierarchical routing policy remains the effective AUTO path and
+`CALIBRATED_FUSION_CONTROLS_ROUTING = false`. The separate
 CALIBRATED_V1 path is a research diagnostic that converts each provider's source-level raw
 direction (`snowboard_support - ski_support`) through a provider-specific scalar Platt model,
 removes the training prior into estimated calibrated log-likelihood-ratio space, averages
@@ -435,7 +463,7 @@ A7 adds a deterministic, evidence-backed research diagnosis layer after effectiv
 qualified complete turns, and A5 biomechanics facts. It consumes upstream facts without changing
 target identity, SportType, turn segmentation, or biomechanics formulas. UNKNOWN SportType blocks
 sport-specific diagnosis. USER-selected SportType permits research routing but is not ground
-truth; unvalidated RAW_V1 AUTO resolution is explicitly limited. A6.3 calibrated diagnostics do
+truth; unvalidated hierarchical AUTO resolution is explicitly limited. A6.3 calibrated diagnostics do
 not control A7 routing.
 
 The registry contains exactly three provisional image-space rules:
@@ -686,13 +714,13 @@ been validated with locally equivalent commands; that does not claim a GitHub-ho
 
 ## A6 SportType foundation
 
-A6 adds provisional `sport-type-v1` contracts and deterministic, dependency-free
+A6 now exposes provisional `sport-type-v2` contracts and deterministic, dependency-free
 `ReferenceSportTypeFusion` for `SKI`, `SNOWBOARD`, and unresolved `UNKNOWN`. The policy is Auto
-First, Ask on Ambiguity, User Override Wins. `EQUIPMENT` and `VISUAL_CLASSIFIER` are primary
-evidence; future calibrated `POSE_GEOMETRY` and `TEMPORAL_MOTION` evidence is secondary. Auto
-resolution requires active primary evidence, sufficient engineering support, and a sufficient
-margin. Ties, conflicts, weak evidence, and secondary-only input remain `UNKNOWN`. Support values
-are engineering values, not calibrated probabilities.
+First, Ask on Ambiguity, User Override Wins. `EQUIPMENT` and `VISUAL_CLASSIFIER` are primary kinds,
+but they are not treated as peer probabilities: target-associated equipment is evaluated first,
+and target-crop visual evidence is fallback. `POSE_GEOMETRY` and `TEMPORAL_MOTION` remain
+non-authoritative secondary diagnostics. Auto resolution requires sufficient engineering support
+and margin. Unsafe contradiction, weak evidence, and secondary-only input remain `UNKNOWN`.
 
 The current RTMDet provider remains person-only and is never interpreted as equipment evidence.
 No dedicated equipment or visual sport classifier is configured, so current real AUTO benchmarks
@@ -712,7 +740,7 @@ make benchmark-sport-type \
   DEBUG_DIR=artifacts/debug/a6_sport_type/ski_test_001_5fps
 ```
 
-The `ski-bench-sport-type-v1` benchmark composes the existing single-pass A5.1 pipeline. It does
+The current SportType benchmark composes the existing single-pass A5.1 pipeline. It does
 not rerun RTMDet/RTMW or infer from filenames. Generic pose and image-space biomechanics remain
 available when SportType is `UNKNOWN`; only future sport-specific analysis is gated.
 `SPORT_TYPE_GT_STATUS = NOT_AVAILABLE`, so accuracy, precision, and recall remain JSON `null`.
@@ -760,8 +788,8 @@ validation remain unavailable.
 
 ### A6.2 visual SportType evidence
 
-A6.2 adds a second independent primary evidence kind without changing `sport-type-v1` fusion
-weights or thresholds:
+A6.2 added a second independent primary evidence kind. B2 preserves both providers while changing
+their routing relationship from peer fusion to an explicit hierarchy:
 
 ```text
 LOCKED target -> RTMDet equipment ---------+
@@ -791,7 +819,7 @@ make sport-visual-doctor OPENML_PY=artifacts/openmmlab-venv/bin/python \
   VISUAL_CHECKPOINT=artifacts/models/a6_2/openai_clip/ViT-B-32.pt
 ```
 
-Run the v4 benchmark with both providers explicitly enabled:
+Run the v5 benchmark with both providers explicitly enabled:
 
 ```bash
 make benchmark-sport-type \
@@ -805,12 +833,45 @@ make benchmark-sport-type \
   DEBUG_DIR=artifacts/debug/a6_2_sport_type/ski_test_001_5fps
 ```
 
-`ski-bench-sport-type-v4` preserves the v3 equipment-only, visual-only, and combined diagnostic auto
-decisions from one model pass. Only the combined result plus an optional authoritative user
-override controls routing. Same-frame evidence IDs are deterministic and provider-qualified.
+`ski-bench-sport-type-v5` preserves equipment-only and visual-only diagnostics and adds an explicit
+hierarchical auto decision from the same model pass. Only the hierarchical RAW decision plus an
+optional authoritative user override controls routing. Same-frame evidence IDs are deterministic
+and provider-qualified.
 Dataset-level LOCKED context counts are unique; per-provider selection and inference counts are
 separate. SportType GT remains unavailable, so accuracy, precision, and recall remain JSON `null`
 even if AUTO resolves on a real clip.
+
+### B2 MVP equipment-first routing policy
+
+`EQUIPMENT_FIRST_VISUAL_FALLBACK_V1` is an MVP research routing policy, not a scientific accuracy
+claim. Equipment evidence is considered more physically specific because it represents
+target-associated ski or snowboard detections; this does not prove that the detector is more
+accurate. Visual CLIP evidence describes generic target-crop appearance and is prompt-taxonomy
+dependent. The two providers' raw support values have different meanings and are not calibrated
+SportType probabilities, so equal numeric values are not interchangeable.
+
+The automatic hierarchy is deterministic:
+
+1. Equipment routes only when its equipment-only aggregate independently satisfies the existing
+   observation, support, and margin thresholds.
+2. If Equipment is unavailable, ambiguous, or insufficient, independently strong Visual evidence
+   may route as `VISUAL_FALLBACK`; weak opposing Equipment remains visible as a disagreement.
+3. If neither kind independently resolves, two same-direction primary kinds may combine using the
+   existing weights and thresholds as `PRIMARY_AGREEMENT`.
+4. Opposing unresolved primary kinds, insufficient evidence, and secondary-only evidence remain
+   `UNKNOWN`.
+
+`AutoSportTypeDecision.routing_basis` is `EQUIPMENT_PRIMARY`, `VISUAL_FALLBACK`,
+`PRIMARY_AGREEMENT`, or `NONE`. For `RESOLVED_AUTO`, `ski_support`, `snowboard_support`, and
+`margin` describe the evidence basis that actually routed the decision. Provider results remain
+unaltered, so a conflicting Visual observation is still inspectable when Equipment routes.
+Explicit user selection remains authoritative and preserves the automatic decision plus any
+auto/user disagreement.
+
+Calibrated fusion remains a research diagnostic only:
+`CALIBRATED_FUSION_CONTROLS_ROUTING = false`. It cannot replace the hierarchical RAW decision.
+No SportType accuracy, precision, recall, or product-readiness claim is made without independent
+human Ground Truth.
 
 ## Provider status and deferred work
 

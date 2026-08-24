@@ -52,6 +52,7 @@ def run_sport_type_golden(path: str | Path) -> dict[str, object]:
             "resolution_status": result.resolution_status.value,
             "auto_sport_type": result.auto_decision.sport_type.value,
             "auto_status": result.auto_decision.status.value,
+            "routing_basis": result.auto_decision.routing_basis.value,
             "auto_user_disagreement": result.auto_user_disagreement,
             "ask_user_recommended": result.ask_user_recommended,
         }

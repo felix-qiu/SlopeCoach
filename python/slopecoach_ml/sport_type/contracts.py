@@ -7,9 +7,10 @@ import math
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 
-SPORT_TYPE_CONTRACT_VERSION = "sport-type-v1"
+SPORT_TYPE_CONTRACT_VERSION = "sport-type-v2"
 SPORT_TYPE_REQUIRED_REASON = "SPORT_TYPE_UNKNOWN"
-SPORT_TYPE_CONFIG_PROFILE = "RESEARCH_DEFAULTS_A6"
+SPORT_TYPE_CONFIG_PROFILE = "RESEARCH_DEFAULTS_A6_4"
+SPORT_TYPE_ROUTING_POLICY = "EQUIPMENT_FIRST_VISUAL_FALLBACK_V1"
 
 
 class SportType(StrEnum):
@@ -30,6 +31,13 @@ class SportTypeResolutionStatus(StrEnum):
     INSUFFICIENT_TOTAL_EVIDENCE = "INSUFFICIENT_TOTAL_EVIDENCE"
     AMBIGUOUS = "AMBIGUOUS"
     CONFLICTING_PRIMARY_EVIDENCE = "CONFLICTING_PRIMARY_EVIDENCE"
+
+
+class SportTypeRoutingBasis(StrEnum):
+    NONE = "NONE"
+    EQUIPMENT_PRIMARY = "EQUIPMENT_PRIMARY"
+    VISUAL_FALLBACK = "VISUAL_FALLBACK"
+    PRIMARY_AGREEMENT = "PRIMARY_AGREEMENT"
 
 
 class SportEvidenceKind(StrEnum):
@@ -236,8 +244,11 @@ class AutoSportTypeDecision:
     ask_user_recommended: bool
     reason_codes: tuple[str, ...]
     limitations: tuple[str, ...] = ()
+    routing_basis: SportTypeRoutingBasis = SportTypeRoutingBasis.NONE
 
     def __post_init__(self) -> None:
+        if not isinstance(self.routing_basis, SportTypeRoutingBasis):
+            raise ValueError("routing_basis must be a SportTypeRoutingBasis")
         for name in ("ski_support", "snowboard_support", "margin"):
             value = getattr(self, name)
             if value is not None:
@@ -274,6 +285,10 @@ class AutoSportTypeDecision:
         if self.status is SportTypeResolutionStatus.RESOLVED_AUTO:
             if self.sport_type is SportType.UNKNOWN or self.ask_user_recommended:
                 raise ValueError("resolved auto decision must select a sport without asking user")
+            if self.routing_basis is SportTypeRoutingBasis.NONE:
+                raise ValueError("resolved auto decision requires a routing basis")
+            if self.ski_support is None or self.snowboard_support is None:
+                raise ValueError("resolved auto decision requires support values")
             if self.sport_type is SportType.SKI and self.ski_support <= self.snowboard_support:
                 raise ValueError("resolved SKI requires ski_support > snowboard_support")
             if (
@@ -281,13 +296,31 @@ class AutoSportTypeDecision:
                 and self.snowboard_support <= self.ski_support
             ):
                 raise ValueError("resolved SNOWBOARD requires snowboard_support > ski_support")
-        elif self.sport_type is not SportType.UNKNOWN or not self.ask_user_recommended:
-            raise ValueError("unresolved auto decision must be UNKNOWN and recommend user input")
+        elif (
+            self.sport_type is not SportType.UNKNOWN
+            or not self.ask_user_recommended
+            or self.routing_basis is not SportTypeRoutingBasis.NONE
+        ):
+            raise ValueError(
+                "unresolved auto decision must be UNKNOWN, have no routing basis, "
+                "and recommend user input"
+            )
+        expected_kinds = {
+            SportTypeRoutingBasis.EQUIPMENT_PRIMARY: {SportEvidenceKind.EQUIPMENT},
+            SportTypeRoutingBasis.VISUAL_FALLBACK: {SportEvidenceKind.VISUAL_CLASSIFIER},
+            SportTypeRoutingBasis.PRIMARY_AGREEMENT: {
+                SportEvidenceKind.EQUIPMENT,
+                SportEvidenceKind.VISUAL_CLASSIFIER,
+            },
+        }.get(self.routing_basis, set())
+        if not expected_kinds.issubset(self.primary_evidence_kinds):
+            raise ValueError("routing basis is inconsistent with active primary evidence")
 
     def to_dict(self) -> dict[str, object]:
         return {
             "sport_type": self.sport_type.value,
             "status": self.status.value,
+            "routing_basis": self.routing_basis.value,
             "ski_support": self.ski_support,
             "snowboard_support": self.snowboard_support,
             "margin": self.margin,
@@ -352,6 +385,7 @@ class SportTypeResult:
     def to_dict(self) -> dict[str, object]:
         return {
             "contract_version": self.contract_version,
+            "routing_policy": SPORT_TYPE_ROUTING_POLICY,
             "effective_sport_type": self.effective_sport_type.value,
             "effective_source": self.effective_source.value,
             "resolution_status": self.resolution_status.value,

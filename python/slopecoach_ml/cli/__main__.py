@@ -50,6 +50,7 @@ from slopecoach_ml.models import load_model_registry
 from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
 from slopecoach_ml.pose import render_debug_overlay
 from slopecoach_ml.pose.mmpose_provider import MMPoseRTMWPoseProvider, OpenMMLabMMPoseBackend
+from slopecoach_ml.product import build_mvp_analysis_payload, select_user_sport_type
 from slopecoach_ml.quality import VideoQualityGate, VideoQualityStatus
 from slopecoach_ml.reference import (
     ReferenceAnalysisConfig,
@@ -125,7 +126,7 @@ def _source_pixel_point(value: str) -> tuple[float, float]:
 class _SlopeCoachArgumentParser(argparse.ArgumentParser):
     def parse_args(self, args=None, namespace=None):
         parsed = super().parse_args(args, namespace)
-        if parsed.command == "benchmark-biomechanics":
+        if parsed.command in {"benchmark-biomechanics", "analyze-video"}:
             has_time = parsed.target_seed_time is not None
             has_point = parsed.target_seed_point is not None
             if has_time != has_point:
@@ -342,6 +343,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     biomechanics.add_argument("--max-debug-frames", type=int, default=12)
     biomechanics.add_argument("--input-non-mirrored", action="store_true")
+    analyze_video = subparsers.add_parser(
+        "analyze-video",
+        help="run the MVP video path with an explicit user-selected SportType",
+    )
+    analyze_video.add_argument("video")
+    analyze_video.add_argument(
+        "--sport-type",
+        type=str.upper,
+        choices=("SKI", "SNOWBOARD"),
+        required=True,
+    )
+    analyze_video.add_argument("--sample-fps", type=float, default=5.0)
+    analyze_video.add_argument("--output")
+    analyze_video.add_argument("--debug-dir")
+    analyze_video.add_argument(
+        "--overlay-video", help="write a sampled pose/biomechanics debug MP4 without model reruns"
+    )
+    analyze_video.add_argument(
+        "--target-seed-time",
+        type=_nonnegative_finite_seconds,
+        help="manual identity initialization time on the source-video timeline, in seconds",
+    )
+    analyze_video.add_argument(
+        "--target-seed-point",
+        type=_source_pixel_point,
+        metavar="X,Y",
+        help="manual identity initialization point in upright SourcePixel2D coordinates",
+    )
+    analyze_video.add_argument("--max-debug-frames", type=int, default=12)
+    analyze_video.add_argument("--input-non-mirrored", action="store_true")
     sport_type = subparsers.add_parser(
         "benchmark-sport-type", help="run A6 auto/user SportType foundation benchmark"
     )
@@ -723,7 +754,11 @@ def main(argv: list[str] | None = None) -> int:
         "benchmark-temporal-turns",
         "benchmark-biomechanics",
         "benchmark-sport-type",
+        "analyze-video",
     }:
+        product_sport_type = (
+            select_user_sport_type(args.sport_type) if args.command == "analyze-video" else None
+        )
         if not args.input_non_mirrored:
             raise RuntimeError(
                 "MIRROR_STATE_UNRESOLVED: pass --input-non-mirrored to attest input state"
@@ -813,6 +848,7 @@ def main(argv: list[str] | None = None) -> int:
             "benchmark-temporal-turns",
             "benchmark-biomechanics",
             "benchmark-sport-type",
+            "analyze-video",
         }:
             collector = _temporal_collector(args)
             identity_template = (
@@ -829,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
                 "benchmark-temporal-turns": benchmark_temporal_turns_frames,
                 "benchmark-biomechanics": benchmark_biomechanics_frames,
                 "benchmark-sport-type": benchmark_sport_type_frames,
+                "analyze-video": benchmark_biomechanics_frames,
             }[args.command]
             runner_kwargs = dict(
                 input_path=args.video,
@@ -844,7 +881,10 @@ def main(argv: list[str] | None = None) -> int:
                 collector=collector,
                 target_identity_gt_status=identity_gt_status,
             )
-            if args.command == "benchmark-biomechanics" and args.target_seed_time is not None:
+            if (
+                args.command in {"benchmark-biomechanics", "analyze-video"}
+                and args.target_seed_time is not None
+            ):
                 runner_kwargs["manual_target_seed"] = ManualTargetSeed(
                     args.target_seed_time,
                     *args.target_seed_point,
@@ -896,7 +936,7 @@ def main(argv: list[str] | None = None) -> int:
                     "turn_events": None,
                 }
             )
-            if args.command == "benchmark-biomechanics" and args.overlay_video:
+            if args.command in {"benchmark-biomechanics", "analyze-video"} and args.overlay_video:
                 report["debug_artifacts"]["overlay_video"] = write_biomechanics_overlay_video(
                     args.overlay_video,
                     report,
@@ -907,6 +947,13 @@ def main(argv: list[str] | None = None) -> int:
             report.pop("_equipment_debug_frames", None)
             report.pop("_visual_debug_frames", None)
             report.pop("_upstream_debug_report", None)
+            if args.command == "analyze-video":
+                assert product_sport_type is not None
+                report = build_mvp_analysis_payload(
+                    video=args.video,
+                    sport_type=product_sport_type,
+                    biomechanics_report=report,
+                )
             _write_json(report, args.output)
             return 0
         debug_collector = RealPoseDebugCollector() if args.debug_dir else None

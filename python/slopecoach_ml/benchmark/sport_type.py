@@ -10,6 +10,7 @@ from slopecoach_ml.biomechanics import (
     FEATURE_REGISTRY_SHA256,
 )
 from slopecoach_ml.sport_type import (
+    SPORT_TYPE_ROUTING_POLICY,
     VISUAL_SPORT_PROMPT_SCHEMA_VERSION,
     NotConfiguredEquipmentSportEvidenceProvider,
     NotConfiguredVisualSportEvidenceProvider,
@@ -34,7 +35,7 @@ from slopecoach_ml.sport_type.calibration.dataset import sha256_file
 from .biomechanics_features import benchmark_biomechanics_frames
 from .sport_type_collector import SportTypeBenchmarkCollector
 
-SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v4"
+SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v5"
 
 
 def benchmark_sport_type_frames(
@@ -179,6 +180,7 @@ def benchmark_sport_type_frames(
     upstream_perf = upstream["performance"]
     report = {
         "benchmark_contract_version": SPORT_TYPE_BENCHMARK_CONTRACT_VERSION,
+        "SPORT_TYPE_ROUTING_POLICY": SPORT_TYPE_ROUTING_POLICY,
         "source_video_id": source_video_id or Path(input_path).stem,
         "source_video_id_origin": "EXPLICIT" if source_video_id else "LEGACY_INFERRED",
         "visual_prompt_schema_version": VISUAL_SPORT_PROMPT_SCHEMA_VERSION,
@@ -207,12 +209,15 @@ def benchmark_sport_type_frames(
         },
         "sport_type": sport_result.to_dict(),
         "raw_auto_decision": auto.to_dict(),
+        "equipment_only_auto_decision": equipment_only.to_dict(),
+        "visual_only_auto_decision": visual_only.to_dict(),
         "raw_provider_summaries": calibration_summaries,
         "calibrated_fusion_result": calibrated_fusion,
         "CALIBRATED_FUSION_CONTROLS_ROUTING": False,
         "diagnostic_auto_decisions": {
             "equipment_only_auto_decision": equipment_only.to_dict(),
             "visual_only_auto_decision": visual_only.to_dict(),
+            "hierarchical_auto_decision": auto.to_dict(),
             "combined_auto_decision": auto.to_dict(),
         },
         "provider_validation": {

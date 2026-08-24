@@ -17,6 +17,7 @@ from slopecoach_ml.sport_type import (
     SportEvidenceProviderStatus,
     SportType,
     SportTypeResolutionStatus,
+    SportTypeRoutingBasis,
     TargetSportFrameContext,
     equipment_crop_bbox,
     execute_sport_evidence_providers,
@@ -256,6 +257,7 @@ def auto_decision(**overrides):
         evidence_observation_count=2,
         ask_user_recommended=False,
         reason_codes=("AUTO_THRESHOLDS_SATISFIED",),
+        routing_basis=SportTypeRoutingBasis.EQUIPMENT_PRIMARY,
     )
     values.update(overrides)
     return AutoSportTypeDecision(**values)
@@ -278,4 +280,12 @@ def test_auto_decision_hardening():
             ski_support=0.9,
             snowboard_support=0.1,
         )
+    with pytest.raises(ValueError, match="routing basis"):
+        auto_decision(routing_basis=SportTypeRoutingBasis.NONE)
+    with pytest.raises(ValueError, match="routing_basis"):
+        auto_decision(routing_basis="EQUIPMENT_PRIMARY")
+    with pytest.raises(ValueError, match="support values"):
+        auto_decision(ski_support=None, snowboard_support=None, margin=None)
+    with pytest.raises(ValueError, match="inconsistent"):
+        auto_decision(routing_basis=SportTypeRoutingBasis.VISUAL_FALLBACK)
     assert auto_decision().sport_type is SportType.SKI

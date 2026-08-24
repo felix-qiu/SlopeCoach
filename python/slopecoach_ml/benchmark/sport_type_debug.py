@@ -69,7 +69,7 @@ def _write_equipment_contact_sheet(destination, report, collector):
     except ImportError as error:
         raise RuntimeError("DEBUG_DEPENDENCY_MISSING: opencv-python/numpy") from error
     tiles = []
-    sport = report["diagnostic_auto_decisions"]["combined_auto_decision"]["sport_type"]
+    sport = report["diagnostic_auto_decisions"]["hierarchical_auto_decision"]["sport_type"]
     for item in frames:
         encoded = collector.images.get(item["frame_index"])
         if encoded is None:
@@ -88,7 +88,7 @@ def _write_equipment_contact_sheet(destination, report, collector):
             _rectangle(cv2, canvas, detection["bbox"], color, 3)
         labels = [
             "VISUAL ZERO-SHOT EVIDENCE - NOT CALIBRATED",
-            f"COMBINED AUTO = {sport}",
+            f"HIERARCHICAL AUTO = {sport}",
         ]
         if equipment:
             labels.append(

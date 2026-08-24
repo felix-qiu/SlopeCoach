@@ -1,7 +1,8 @@
 """A6.3 provisional SportType calibration contracts.
 
 These contracts are Python research/reference models, not production Domain Kernel
-contracts. RAW_V1 remains the effective routing implementation.
+contracts. The uncalibrated equipment-first hierarchy remains the effective routing
+implementation.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ SPORT_EVIDENCE_CALIBRATION_CONTRACT_VERSION = "sport-evidence-calibration-v1"
 SPORT_TYPE_GT_CONTRACT_VERSION = "sport-type-gt-v1"
 SPORT_TYPE_CALIBRATION_DATASET_VERSION = "sport-type-calibration-dataset-v1"
 CALIBRATED_FUSION_VERSION = "calibrated-sport-fusion-v1"
-SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v4"
+SPORT_TYPE_BENCHMARK_CONTRACT_VERSION = "ski-bench-sport-type-v5"
 CALIBRATION_PROFILE = "RESEARCH_DEFAULTS_A6_3"
 CALIBRATED_FUSION_CONTROLS_ROUTING = False
 
