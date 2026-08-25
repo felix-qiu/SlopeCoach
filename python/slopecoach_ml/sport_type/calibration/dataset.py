@@ -82,7 +82,6 @@ def build_calibration_dataset(
         if artifact.get("benchmark_contract_version") not in {
             "ski-bench-sport-type-v3",
             "ski-bench-sport-type-v4",
-            "ski-bench-sport-type-v5",
         }:
             raise ValueError("incompatible SportType benchmark artifact")
         video = artifact.get("video", {})

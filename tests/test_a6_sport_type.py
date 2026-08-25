@@ -21,7 +21,6 @@ from slopecoach_ml.sport_type import (
     SportType,
     SportTypeConfig,
     SportTypeResolutionStatus,
-    SportTypeRoutingBasis,
     SportTypeSource,
     TargetSportFrameContext,
     extract_uncalibrated_sport_cues,
@@ -158,35 +157,6 @@ def test_not_configured_and_mock_providers_are_honest():
     assert mock.status is SportEvidenceProviderStatus.EXECUTED_WITH_EVIDENCE
 
 
-def test_failed_equipment_allows_strong_visual_fallback():
-    failed_equipment = SportEvidenceProviderResult(
-        "failed-equipment",
-        SportEvidenceKind.EQUIPMENT,
-        SportEvidenceProviderStatus.FAILED,
-        error="RuntimeError: detector unavailable",
-    )
-    visual = MockSportEvidenceProvider(
-        "visual",
-        SportEvidenceKind.VISUAL_CLASSIFIER,
-        (
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.04,
-                snowboard=0.91,
-                provider="visual",
-            ),
-        ),
-    ).infer()
-    result = resolve_sport_type((failed_equipment, visual))
-    assert result.effective_sport_type is SportType.SNOWBOARD
-    assert result.auto_decision.routing_basis is SportTypeRoutingBasis.VISUAL_FALLBACK
-    assert result.auto_decision.reason_codes == (
-        "VISUAL_FALLBACK_EQUIPMENT_UNAVAILABLE",
-    )
-    assert result.provider_results[0].status is SportEvidenceProviderStatus.FAILED
-
-
 def test_target_provider_context_requires_locked_identity():
     geometry = FrameGeometry(640, 480)
     kwargs = dict(
@@ -249,7 +219,6 @@ def test_strong_primary_resolves(ski, snowboard, expected):
     )
     assert decision.sport_type is expected
     assert decision.status is SportTypeResolutionStatus.RESOLVED_AUTO
-    assert decision.routing_basis is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
 
 
 def test_tie_margin_conflict_and_weak_primary_are_unresolved():
@@ -268,151 +237,7 @@ def test_tie_margin_conflict_and_weak_primary_are_unresolved():
             ),
         ]
     )
-    assert conflict.sport_type is SportType.SKI
-    assert conflict.routing_basis is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
-    assert "EQUIPMENT_PRIMARY_VISUAL_DISAGREES" in conflict.reason_codes
-
-
-@pytest.mark.parametrize(
-    "ski,snowboard,expected",
-    [(0.91, 0.04, SportType.SKI), (0.05, 0.92, SportType.SNOWBOARD)],
-)
-def test_strong_visual_fallback_without_equipment(ski, snowboard, expected):
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation(
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=ski,
-                snowboard=snowboard,
-            )
-        ]
-    )
-    assert decision.sport_type is expected
-    assert decision.routing_basis is SportTypeRoutingBasis.VISUAL_FALLBACK
-    assert decision.reason_codes == ("VISUAL_FALLBACK_EQUIPMENT_UNAVAILABLE",)
-
-
-@pytest.mark.parametrize(
-    "equipment,visual,expected",
-    [
-        ((0.90, 0.05), (0.05, 0.90), SportType.SKI),
-        ((0.05, 0.90), (0.90, 0.05), SportType.SNOWBOARD),
-    ],
-)
-def test_strong_equipment_outranks_opposing_strong_visual(equipment, visual, expected):
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation("eq", ski=equipment[0], snowboard=equipment[1]),
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=visual[0],
-                snowboard=visual[1],
-            ),
-        ]
-    )
-    assert decision.sport_type is expected
-    assert decision.routing_basis is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
-    assert (decision.ski_support, decision.snowboard_support) == equipment
-    assert decision.reason_codes == (
-        "EQUIPMENT_PRIMARY_THRESHOLDS_SATISFIED",
-        "EQUIPMENT_PRIMARY_VISUAL_DISAGREES",
-    )
-
-
-def test_strong_equipment_records_visual_agreement():
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation("eq", ski=0.90, snowboard=0.05),
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.80,
-                snowboard=0.10,
-            ),
-        ]
-    )
-    assert decision.reason_codes == (
-        "EQUIPMENT_PRIMARY_THRESHOLDS_SATISFIED",
-        "EQUIPMENT_PRIMARY_VISUAL_AGREES",
-    )
-
-
-def test_weak_equipment_does_not_veto_opposing_visual_fallback():
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation("eq", ski=0.69, snowboard=0.10),
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.05,
-                snowboard=0.90,
-            ),
-        ]
-    )
-    assert decision.sport_type is SportType.SNOWBOARD
-    assert decision.routing_basis is SportTypeRoutingBasis.VISUAL_FALLBACK
-    assert decision.ski_support == 0.05
-    assert decision.snowboard_support == 0.90
-    assert decision.reason_codes == (
-        "VISUAL_FALLBACK_EQUIPMENT_INSUFFICIENT",
-        "VISUAL_FALLBACK_WEAK_EQUIPMENT_DISAGREEMENT",
-    )
-
-
-def test_weak_primary_agreement_combines_only_when_combined_thresholds_pass():
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation("eq", ski=0.72, snowboard=0.60),
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.68,
-                snowboard=0.20,
-            ),
-        ]
-    )
-    assert decision.sport_type is SportType.SKI
-    assert decision.routing_basis is SportTypeRoutingBasis.PRIMARY_AGREEMENT
-    assert decision.reason_codes == ("PRIMARY_KINDS_AGREE",)
-    assert decision.ski_support == pytest.approx((0.72 + 0.8 * 0.68) / 1.8)
-    assert decision.snowboard_support == pytest.approx((0.60 + 0.8 * 0.20) / 1.8)
-
-    insufficient = ReferenceSportTypeFusion().decide(
-        [
-            observation("weak-eq", ski=0.62, snowboard=0.20),
-            observation(
-                "weak-visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.66,
-                snowboard=0.18,
-            ),
-        ]
-    )
-    assert insufficient.sport_type is SportType.UNKNOWN
-    assert insufficient.routing_basis is SportTypeRoutingBasis.NONE
-    assert insufficient.reason_codes == (
-        "PRIMARY_KINDS_AGREE",
-        "WINNER_PRIMARY_SUPPORT_BELOW_MINIMUM",
-    )
-
-
-def test_opposing_unresolved_primary_kinds_fail_closed():
-    decision = ReferenceSportTypeFusion().decide(
-        [
-            observation("eq", ski=0.69, snowboard=0.10),
-            observation(
-                "visual",
-                kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-                ski=0.10,
-                snowboard=0.69,
-            ),
-        ]
-    )
-    assert decision.sport_type is SportType.UNKNOWN
-    assert decision.status is SportTypeResolutionStatus.CONFLICTING_PRIMARY_EVIDENCE
-    assert decision.routing_basis is SportTypeRoutingBasis.NONE
-    assert decision.reason_codes == ("PRIMARY_KINDS_CONFLICT_UNRESOLVED",)
+    assert conflict.status is SportTypeResolutionStatus.CONFLICTING_PRIMARY_EVIDENCE
 
 
 def test_exact_tie_below_conflict_threshold_is_ambiguous():
@@ -437,10 +262,6 @@ def test_primary_with_secondary_fusion_behaviors():
         ReferenceSportTypeFusion().decide([primary, opposing]).sport_type
         is SportType.SKI
     )
-    decision = ReferenceSportTypeFusion().decide([primary, opposing])
-    assert decision.routing_basis is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
-    assert decision.ski_support == 0.9
-    assert decision.snowboard_support == 0.05
 
 
 def test_duplicates_rejected_and_distinct_frame_timestamps_required():
@@ -463,12 +284,6 @@ def test_fusion_is_order_independent_and_strict_json():
         observation("b", scope=SportEvidenceScope.FRAME, timestamp=200000),
         observation(
             "c", kind=SportEvidenceKind.TEMPORAL_MOTION, ski=0.8, snowboard=0.1
-        ),
-        observation(
-            "visual",
-            kind=SportEvidenceKind.VISUAL_CLASSIFIER,
-            ski=0.05,
-            snowboard=0.90,
         ),
     ]
     forward = ReferenceSportTypeFusion().decide(items).to_dict()
@@ -495,10 +310,6 @@ def test_user_override_retains_auto_and_exposes_disagreement():
     assert not agreeing.auto_user_disagreement
     assert disagreeing.auto_user_disagreement
     assert disagreeing.auto_decision.sport_type is SportType.SKI
-    assert (
-        disagreeing.auto_decision.routing_basis
-        is SportTypeRoutingBasis.EQUIPMENT_PRIMARY
-    )
     assert disagreeing.effective_sport_type is SportType.SNOWBOARD
 
 

@@ -33,10 +33,19 @@ def test_analyze_video_parser_requires_explicit_product_sport_type():
         cli.build_parser().parse_args(["analyze-video", "clip.mp4"])
 
 
-def test_analyze_video_parser_rejects_auto():
+@pytest.mark.parametrize("sport_type", ["SKI", "SNOWBOARD"])
+def test_analyze_video_parser_accepts_supported_product_sport_types(sport_type):
+    args = cli.build_parser().parse_args(
+        ["analyze-video", "clip.mp4", "--sport-type", sport_type]
+    )
+    assert args.sport_type == sport_type
+
+
+@pytest.mark.parametrize("sport_type", ["AUTO", "UNKNOWN"])
+def test_analyze_video_parser_rejects_non_product_sport_types(sport_type):
     with pytest.raises(SystemExit):
         cli.build_parser().parse_args(
-            ["analyze-video", "clip.mp4", "--sport-type", "AUTO"]
+            ["analyze-video", "clip.mp4", "--sport-type", sport_type]
         )
 
 
