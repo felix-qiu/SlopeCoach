@@ -27,11 +27,9 @@ from slopecoach_ml.temporal import (
     stabilize_target_pose_stream,
 )
 from slopecoach_ml.turns import (
-    ReferencePeakDetector,
+    TurnEvidenceFusionConfig,
     TurnSegmentationConfig,
-    build_turn_signal,
-    detect_zero_crossings,
-    segment_turns,
+    detect_turns_with_evidence_fusion,
     valid_signal_runs,
 )
 
@@ -54,6 +52,7 @@ def benchmark_biomechanics_frames(
     appearance_encoder: Any | None = None,
     target_identity_gt_status: str = "NOT_AVAILABLE",
     manual_target_seed: ManualTargetSeed | None = None,
+    include_turn_debug: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     sink = collector or TemporalTurnCollector()
@@ -72,19 +71,17 @@ def benchmark_biomechanics_frames(
         appearance_encoder=appearance_encoder,
         target_identity_gt_status=target_identity_gt_status,
         manual_target_seed=manual_target_seed,
+        include_turn_debug=include_turn_debug,
     )
     temporal_config, turn_config = TemporalPoseConfig(), TurnSegmentationConfig()
     temporal = stabilize_target_pose_stream(sink.samples, temporal_config)
-    signal = build_turn_signal(
-        temporal.samples, minimum_confidence=turn_config.minimum_signal_confidence
+    turn_detection = detect_turns_with_evidence_fusion(
+        temporal.samples,
+        turn_config,
+        TurnEvidenceFusionConfig(),
     )
-    peaks = ReferencePeakDetector().detect(signal, turn_config)
-    crossings = detect_zero_crossings(
-        signal,
-        turn_config.zero_crossing_tolerance,
-        minimum_signal_confidence=turn_config.minimum_signal_confidence,
-    )
-    turns = segment_turns(signal, peaks, crossings, turn_config)
+    signal = list(turn_detection.signal)
+    turns = list(turn_detection.segments)
     runs = valid_signal_runs(signal, turn_config)
     biomechanics_config = BiomechanicsFeatureConfig()
     stage = time.perf_counter()
@@ -221,4 +218,6 @@ def benchmark_biomechanics_frames(
     }
     if "manual_target_seed" in upstream:
         report["manual_target_seed"] = upstream["manual_target_seed"]
+    if include_turn_debug:
+        report["turn_debug"] = upstream["turn_debug"]
     return report

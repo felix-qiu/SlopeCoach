@@ -317,6 +317,9 @@ def build_parser() -> argparse.ArgumentParser:
     temporal_turns.add_argument("video")
     temporal_turns.add_argument("--sample-fps", type=float, default=5.0)
     temporal_turns.add_argument("--output")
+    temporal_turns.add_argument(
+        "--turn-debug-output", help="write deterministic research-only turn trace JSON"
+    )
     temporal_turns.add_argument("--debug-dir")
     temporal_turns.add_argument("--max-debug-frames", type=int, default=12)
     temporal_turns.add_argument("--input-non-mirrored", action="store_true")
@@ -326,6 +329,9 @@ def build_parser() -> argparse.ArgumentParser:
     biomechanics.add_argument("video")
     biomechanics.add_argument("--sample-fps", type=float, default=5.0)
     biomechanics.add_argument("--output")
+    biomechanics.add_argument(
+        "--turn-debug-output", help="write deterministic research-only turn trace JSON"
+    )
     biomechanics.add_argument("--debug-dir")
     biomechanics.add_argument(
         "--overlay-video", help="write a sampled pose/biomechanics debug MP4 without model reruns"
@@ -356,6 +362,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_video.add_argument("--sample-fps", type=float, default=5.0)
     analyze_video.add_argument("--output")
+    analyze_video.add_argument(
+        "--turn-debug-output", help="write deterministic research-only turn trace JSON"
+    )
     analyze_video.add_argument("--debug-dir")
     analyze_video.add_argument(
         "--overlay-video", help="write a sampled pose/biomechanics debug MP4 without model reruns"
@@ -886,6 +895,12 @@ def main(argv: list[str] | None = None) -> int:
                 collector=collector,
                 target_identity_gt_status=identity_gt_status,
             )
+            if args.command in {
+                "benchmark-temporal-turns",
+                "benchmark-biomechanics",
+                "analyze-video",
+            }:
+                runner_kwargs["include_turn_debug"] = bool(args.turn_debug_output)
             if (
                 args.command in {"benchmark-biomechanics", "analyze-video"}
                 and args.target_seed_time is not None
@@ -923,6 +938,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 runner_kwargs["source_video_id"] = args.source_video_id
             report = benchmark_runner(**runner_kwargs)
+            if getattr(args, "turn_debug_output", None):
+                _write_json(report["turn_debug"], args.turn_debug_output)
             report["debug_artifacts"] = (
                 (
                     write_sport_type_debug_artifacts
@@ -952,6 +969,7 @@ def main(argv: list[str] | None = None) -> int:
             report.pop("_equipment_debug_frames", None)
             report.pop("_visual_debug_frames", None)
             report.pop("_upstream_debug_report", None)
+            report.pop("turn_debug", None)
             if args.command == "analyze-video":
                 assert product_sport_type is not None
                 report = assemble_analyze_video_product(

@@ -11,6 +11,14 @@ from .contracts import (
     TurnSignalSample,
     ZeroCrossing,
 )
+from .debug import TURN_DEBUG_CONTRACT_VERSION, TurnDebugTrace, build_turn_debug_trace
+from .fusion import (
+    TurnDetectionResult,
+    TurnEvidenceFusionConfig,
+    TurnEvidenceSample,
+    detect_turns_with_evidence_fusion,
+    detect_turns_with_reference_pipeline,
+)
 from .peaks import ReferencePeakDetector, SciPyFindPeaksDetector
 from .runs import (
     ValidSignalRun,
@@ -30,6 +38,11 @@ __all__ = [
     "RealTurnSegmentationStatus",
     "SciPyFindPeaksDetector",
     "TurnPhaseSign",
+    "TURN_DEBUG_CONTRACT_VERSION",
+    "TurnDebugTrace",
+    "TurnDetectionResult",
+    "TurnEvidenceFusionConfig",
+    "TurnEvidenceSample",
     "TurnSegment",
     "TurnSegmentationConfig",
     "TurnSegmentStatus",
@@ -37,7 +50,10 @@ __all__ = [
     "ValidSignalRun",
     "ZeroCrossing",
     "build_turn_signal",
+    "build_turn_debug_trace",
     "classify_real_turn_status",
+    "detect_turns_with_evidence_fusion",
+    "detect_turns_with_reference_pipeline",
     "detect_zero_crossings",
     "no_qualified_candidate_reason",
     "segmentation_summary",

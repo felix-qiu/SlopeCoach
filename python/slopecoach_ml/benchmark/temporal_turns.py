@@ -17,13 +17,12 @@ from slopecoach_ml.temporal import (
     stabilize_target_pose_stream,
 )
 from slopecoach_ml.turns import (
-    ReferencePeakDetector,
+    TurnEvidenceFusionConfig,
     TurnSegmentationConfig,
-    build_turn_signal,
+    build_turn_debug_trace,
     classify_real_turn_status,
-    detect_zero_crossings,
+    detect_turns_with_evidence_fusion,
     no_qualified_candidate_reason,
-    segment_turns,
     segmentation_summary,
     signal_sufficiency_diagnostics,
 )
@@ -108,6 +107,7 @@ def benchmark_temporal_turns_frames(
     appearance_encoder: Any | None = None,
     target_identity_gt_status: str = "NOT_AVAILABLE",
     manual_target_seed: ManualTargetSeed | None = None,
+    include_turn_debug: bool = False,
 ) -> dict[str, Any]:
     temporal_settings = temporal_config or TemporalPoseConfig()
     turn_settings = turn_config or TurnSegmentationConfig()
@@ -133,18 +133,18 @@ def benchmark_temporal_turns_frames(
     )
     temporal = stabilize_target_pose_stream(sink.samples, temporal_settings)
     stage = time.perf_counter()
-    signal = build_turn_signal(
-        temporal.samples, minimum_confidence=turn_settings.minimum_signal_confidence
+    turn_detection = detect_turns_with_evidence_fusion(
+        temporal.samples,
+        turn_settings,
+        TurnEvidenceFusionConfig(),
     )
+    signal = list(turn_detection.signal)
     turn_signal_seconds = time.perf_counter() - stage
     stage = time.perf_counter()
-    peaks = ReferencePeakDetector().detect(signal, turn_settings)
-    crossings = detect_zero_crossings(
-        signal,
-        turn_settings.zero_crossing_tolerance,
-        minimum_signal_confidence=turn_settings.minimum_signal_confidence,
-    )
-    segments = segment_turns(signal, peaks, crossings, turn_settings)
+    raw_peaks = list(turn_detection.raw_peaks)
+    peaks = list(turn_detection.peaks)
+    crossings = list(turn_detection.crossings)
+    segments = list(turn_detection.segments)
     turn_segmentation_seconds = time.perf_counter() - stage
     temporal_counts = Counter()
     for sample in temporal.samples:
@@ -182,6 +182,16 @@ def benchmark_temporal_turns_frames(
             "temporal_pose": asdict(temporal_settings),
             "turn_segmentation": asdict(turn_settings),
             "peak_detector": "ReferencePeakDetector",
+            "turn_detection_path": (
+                "TurnEvidenceFusionV2"
+                if turn_detection.fusion_config is not None
+                else "ReferenceTurnPipeline"
+            ),
+            "turn_evidence_fusion": (
+                asdict(turn_detection.fusion_config)
+                if turn_detection.fusion_config is not None
+                else {"enabled": False}
+            ),
             "SCIPY_USAGE": "NOT_USED",
         },
         "video": identity_report["video"],
@@ -247,9 +257,12 @@ def benchmark_temporal_turns_frames(
             "median_absolute_signal_delta": diagnostics["median_absolute_signal_delta"],
             "positive_peak_count": diagnostics["qualified_positive_peak_count"],
             "negative_peak_count": diagnostics["qualified_negative_peak_count"],
+            "turn_candidate_count": len(raw_peaks),
             "qualified_peak_count": diagnostics["qualified_peak_count"],
+            "rejected_peak_count": len(turn_detection.rejected_peaks),
             "zero_crossing_count": diagnostics["zero_crossing_count"],
             "no_qualified_candidate_reason": no_peak_reason,
+            "fusion_summary": turn_detection.fusion_summary,
         },
         "signal_runs": diagnostics["signal_runs"],
         "turn_segmentation": {
@@ -295,10 +308,25 @@ def benchmark_temporal_turns_frames(
         ],
         "temporal_trace": [sample.to_dict() for sample in temporal.samples],
         "turn_signal_samples": [sample.to_dict() for sample in signal],
-        "turn_events": [peak.to_dict() for peak in peaks],
+        "turn_events": [peak.to_dict() for peak in raw_peaks],
+        "qualified_turn_events": [peak.to_dict() for peak in peaks],
         "zero_crossings": [crossing.to_dict() for crossing in crossings],
         "turn_segments": [segment.to_dict() for segment in segments],
     }
     if "manual_target_seed" in identity_report:
         report["manual_target_seed"] = identity_report["manual_target_seed"]
+    if include_turn_debug:
+        report["turn_debug"] = build_turn_debug_trace(
+            temporal.samples,
+            signal,
+            peaks,
+            segments,
+            crossings,
+            turn_settings,
+            evidence_samples=list(turn_detection.evidence_samples),
+            raw_peaks=raw_peaks,
+            rejected_peaks=list(turn_detection.rejected_peaks),
+            fusion_summary=turn_detection.fusion_summary,
+            fusion_config=turn_detection.fusion_config,
+        ).to_dict()
     return report
