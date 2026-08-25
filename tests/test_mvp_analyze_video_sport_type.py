@@ -7,7 +7,7 @@ import pytest
 
 from slopecoach_ml.cli import __main__ as cli
 from slopecoach_ml.pose import FrameGeometry
-from slopecoach_ml.product import build_mvp_analysis_payload, select_user_sport_type
+from slopecoach_ml.product import select_user_sport_type
 from slopecoach_ml.sport_type import SportType
 
 
@@ -67,25 +67,17 @@ def test_a6_research_benchmark_still_exposes_auto_and_provider_controls():
     assert args.visual_provider == "openai-clip"
 
 
-def test_product_payload_has_no_inferred_or_calibrated_sport_fields():
-    payload = build_mvp_analysis_payload(
-        video="clip.mp4",
-        sport_type=select_user_sport_type("SNOWBOARD"),
-        biomechanics_report={"benchmark_contract_version": "test-biomechanics"},
-    )
-    assert payload["sport_type"] == {
+def test_product_sport_provenance_has_no_inferred_or_calibrated_fields():
+    sport_type = select_user_sport_type("SNOWBOARD").to_dict()
+    assert sport_type == {
         "contract_version": "mvp-user-sport-type-v1",
         "effective_sport_type": "SNOWBOARD",
         "effective_source": "USER",
         "resolution_status": "RESOLVED_USER",
     }
-    assert payload["automatic_sport_type_research"] == {
-        "status": "DEFERRED_RESEARCH_ONLY",
-        "executed": False,
-    }
-    assert "auto_decision" not in payload["sport_type"]
-    assert "provider_results" not in payload["sport_type"]
-    json.dumps(payload, allow_nan=False)
+    assert "auto_decision" not in sport_type
+    assert "provider_results" not in sport_type
+    json.dumps(sport_type, allow_nan=False)
 
 
 class _Detector:
@@ -109,6 +101,13 @@ def _forbidden(*args, **kwargs):
 def test_analyze_video_never_constructs_or_calls_automatic_sport_type(
     monkeypatch, tmp_path
 ):
+    counts = {
+        "sampler": 0,
+        "video_iteration": 0,
+        "detector": 0,
+        "pose": 0,
+        "biomechanics_pass": 0,
+    }
     frame = SimpleNamespace(
         image=object(),
         geometry=FrameGeometry(640, 480),
@@ -120,11 +119,65 @@ def test_analyze_video_never_constructs_or_calls_automatic_sport_type(
         "_real_providers",
         lambda: (_Detector(), _PoseProvider(), "cpu", {"detector_seconds": 0.0}),
     )
-    monkeypatch.setattr(cli, "OpenCVVideoSampler", lambda *args, **kwargs: [frame])
+
+    def sampler(*args, **kwargs):
+        counts["sampler"] += 1
+
+        def frames():
+            counts["video_iteration"] += 1
+            yield frame
+
+        return frames()
+
+    def biomechanics_runner(**kwargs):
+        counts["biomechanics_pass"] += 1
+        for sampled in kwargs["frames"]:
+            counts["detector"] += 1
+            detections = kwargs["detector"].detect(sampled.image, sampled.geometry)
+            counts["pose"] += 1
+            kwargs["pose_provider"].estimate_detections(
+                sampled.image,
+                detections,
+                sampled.geometry,
+                timestamp_us=sampled.timestamp_us,
+                frame_index=sampled.frame_index,
+            )
+        assert kwargs["warmup_frames"] == 0
+        return {
+            "benchmark_contract_version": "ski-bench-biomechanics-v2",
+            "feature_schema_version": "biomechanics-feature-schema-v1",
+            "feature_registry_sha256": (
+                "2777c3fbf7513e7537122f897f1901e61baf7eeddcee927937decb7476953048"
+            ),
+            "video": {
+                "duration_seconds": 1.0,
+                "width_px": 640,
+                "height_px": 480,
+            },
+            "models": {"detector": {"model_id": "det"}, "pose": {"model_id": "pose"}},
+            "runtime": {"device": "cpu", "warmup_frames": 0},
+            "performance": {"total_seconds": 0.1},
+            "identity_input": {
+                "identity_locked_frame_count": 1,
+                "identity_unsafe_frame_count": 0,
+            },
+            "frame_biomechanics": {"trusted_frame_count": 1},
+            "turn_segments": [],
+            "biomechanics_result": {
+                "contract_version": "temporal-biomechanics-v2",
+                "frame_facts": [],
+                "temporal_segment_features": [],
+                "turn_features": [],
+                "feature_coverage": {},
+                "limitations": ["IMAGE_SPACE_2D_ONLY_NOT_PHYSICAL_3D"],
+            },
+        }
+
+    monkeypatch.setattr(cli, "OpenCVVideoSampler", sampler)
     monkeypatch.setattr(
         cli,
         "benchmark_biomechanics_frames",
-        lambda **kwargs: {"benchmark_contract_version": "test-biomechanics"},
+        biomechanics_runner,
     )
     for name in (
         "OpenMMLabEquipmentBackend",
@@ -157,3 +210,10 @@ def test_analyze_video_never_constructs_or_calls_automatic_sport_type(
     assert payload["sport_type"]["effective_source"] == "USER"
     assert payload["sport_type"]["resolution_status"] == "RESOLVED_USER"
     assert payload["automatic_sport_type_research"]["executed"] is False
+    assert counts == {
+        "sampler": 1,
+        "video_iteration": 1,
+        "detector": 1,
+        "pose": 1,
+        "biomechanics_pass": 1,
+    }

@@ -50,7 +50,7 @@ from slopecoach_ml.models import load_model_registry
 from slopecoach_ml.openmmlab import configured_device, openmmlab_preflight
 from slopecoach_ml.pose import render_debug_overlay
 from slopecoach_ml.pose.mmpose_provider import MMPoseRTMWPoseProvider, OpenMMLabMMPoseBackend
-from slopecoach_ml.product import build_mvp_analysis_payload, select_user_sport_type
+from slopecoach_ml.product import assemble_analyze_video_product, select_user_sport_type
 from slopecoach_ml.quality import VideoQualityGate, VideoQualityStatus
 from slopecoach_ml.reference import (
     ReferenceAnalysisConfig,
@@ -770,25 +770,26 @@ def main(argv: list[str] | None = None) -> int:
         registry = load_model_registry(_root() / "models/registry.json")
         sampler = OpenCVVideoSampler(args.video, sample_fps=args.sample_fps)
         warmup_frames = 0
-        warmup_iterator = iter(sampler)
-        try:
-            warmup = next(warmup_iterator)
-        except StopIteration:
-            warmup = None
-        finally:
-            close = getattr(warmup_iterator, "close", None)
-            if close:
-                close()
-        if warmup is not None:
-            warmup_detections = detector.detect(warmup.image, warmup.geometry)
-            pose_provider.estimate_detections(
-                warmup.image,
-                warmup_detections,
-                warmup.geometry,
-                timestamp_us=warmup.timestamp_us,
-                frame_index=warmup.frame_index,
-            )
-            warmup_frames = 1
+        if args.command != "analyze-video":
+            warmup_iterator = iter(sampler)
+            try:
+                warmup = next(warmup_iterator)
+            except StopIteration:
+                warmup = None
+            finally:
+                close = getattr(warmup_iterator, "close", None)
+                if close:
+                    close()
+            if warmup is not None:
+                warmup_detections = detector.detect(warmup.image, warmup.geometry)
+                pose_provider.estimate_detections(
+                    warmup.image,
+                    warmup_detections,
+                    warmup.geometry,
+                    timestamp_us=warmup.timestamp_us,
+                    frame_index=warmup.frame_index,
+                )
+                warmup_frames = 1
         if args.command == "benchmark-target-identity":
             target_ground_truth = (
                 load_target_ground_truth(args.target_gt, args.video) if args.target_gt else None
@@ -869,7 +870,11 @@ def main(argv: list[str] | None = None) -> int:
             }[args.command]
             runner_kwargs = dict(
                 input_path=args.video,
-                frames=OpenCVVideoSampler(args.video, sample_fps=args.sample_fps),
+                frames=(
+                    sampler
+                    if args.command == "analyze-video"
+                    else OpenCVVideoSampler(args.video, sample_fps=args.sample_fps)
+                ),
                 detector=detector,
                 pose_provider=pose_provider,
                 detector_model=registry["rtmdet-m-640-coco-obj365-person"].to_dict(),
@@ -949,7 +954,7 @@ def main(argv: list[str] | None = None) -> int:
             report.pop("_upstream_debug_report", None)
             if args.command == "analyze-video":
                 assert product_sport_type is not None
-                report = build_mvp_analysis_payload(
+                report = assemble_analyze_video_product(
                     video=args.video,
                     sport_type=product_sport_type,
                     biomechanics_report=report,

@@ -124,7 +124,7 @@ All commands emit JSON to stdout. Add `--output artifacts/name.json` to write an
 Invalid inputs return a non-zero exit code. Exceptions are reported rather than converted into
 fake success.
 
-## MVP product SportType decision
+## B3 MVP analyze-video product pipeline
 
 The product `analyze-video` request requires an explicit user selection. The only accepted
 values are `SKI` (双板) and `SNOWBOARD` (单板); omission, `AUTO`, and `UNKNOWN` are command errors.
@@ -136,9 +136,33 @@ effective_source = USER
 resolution_status = RESOLVED_USER
 ```
 
-The MVP command reuses the configured person detector, pose provider, target/temporal pipeline,
-and biomechanics benchmark pass. It does **not** construct the A6 Equipment or CLIP providers,
-run `ReferenceSportTypeFusion` or calibrated fusion, load the CLIP checkpoint, or perform extra
+`analyze-video` is the single MVP product entry point. It performs one video/model pass and then
+orchestrates existing reference modules without recomputation:
+
+```text
+video + explicit SportType + optional target seed
+  -> A3 Target Identity
+  -> A4 Temporal Pose / Turn Segmentation
+  -> A5 Biomechanics
+  -> A7 Diagnosis
+  -> A8 nullable ScoreCard / deterministic Coach
+  -> A9 AnalysisResult v1 / ProductReport v1
+```
+
+The command does not perform a separate warmup inference pass or reopen the video for downstream
+stages. A7–A9 consume the facts produced by the single A5 pass. The resulting JSON artifact contains
+the compact `analysis_result`, final `product_report`, model/runtime provenance, and the explicit
+SportType provenance. Its ProductReport and AnalysisResult have independent deterministic semantic
+SHA256 fingerprints; runtime timing is outside those semantic fingerprints.
+
+If trusted target evidence and qualified turns are available, the availability Quality Gate may
+be `READY`. A safe target with no qualified turns is `PARTIAL_ANALYSIS` with
+`NO_QUALIFIED_TURNS`; Diagnosis, ScoreCard, and Coach remain unavailable rather than being
+fabricated. No trusted target pose is `NOT_ANALYZABLE` with `TARGET_IDENTITY_UNCERTAIN`, and
+product recommendations are suppressed. Numeric ScoreCard values remain `null`.
+
+The product path does **not** construct the A6 Equipment or CLIP providers, run
+`ReferenceSportTypeFusion` or calibrated fusion, load the CLIP checkpoint, or perform extra
 equipment inference. Its artifact records `automatic_sport_type_research.executed=false` and
 `status=DEFERRED_RESEARCH_ONLY`.
 
