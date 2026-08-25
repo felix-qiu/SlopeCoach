@@ -3,7 +3,11 @@ from __future__ import annotations
 import copy
 import json
 
-from slopecoach_ml.product import assemble_analyze_video_product, select_user_sport_type
+from slopecoach_ml.product import (
+    AnalysisContext,
+    assemble_analyze_video_product,
+    select_user_sport_type,
+)
 
 TIMESTAMPS = (0, 250_000, 500_000, 750_000, 1_000_000)
 
@@ -155,6 +159,68 @@ def test_qualified_turn_flows_through_diagnosis_scorecard_coach_and_a9():
     assert payload["automatic_sport_type_research"]["executed"] is False
 
 
+def test_analysis_context_is_deterministic_and_snapshots_raw_report():
+    report = _report(qualified=True)
+    first = AnalysisContext.from_biomechanics_report(
+        video="synthetic.mp4",
+        sport_type=select_user_sport_type("SKI"),
+        biomechanics_report=report,
+    )
+    second = AnalysisContext.from_biomechanics_report(
+        video="synthetic.mp4",
+        sport_type=select_user_sport_type("SKI"),
+        biomechanics_report=copy.deepcopy(report),
+    )
+    assert first.to_dict() == second.to_dict()
+    assert first.analysis_context_sha256 == second.analysis_context_sha256
+    assert first.biomechanics_evidence_available is True
+
+    report["biomechanics_result"]["frame_facts"].clear()
+    assert first.biomechanics["frame_fact_count"] == 10
+    assert len(first.biomechanics_result["frame_facts"]) == 10
+
+
+def test_insufficient_biomechanics_is_partial_and_suppresses_downstream():
+    report = _report(qualified=True)
+    report["biomechanics_result"]["frame_facts"] = []
+    payload = assemble_analyze_video_product(
+        video="synthetic.mp4",
+        sport_type=select_user_sport_type("SKI"),
+        biomechanics_report=report,
+    )
+    availability = _section(payload, "BIOMECHANICS")["payload"]["availability_summary"]
+    assert payload["product_report"]["status"] == "PARTIAL_ANALYSIS"
+    assert availability["status"] == "INSUFFICIENT"
+    assert availability["reason_codes"] == ["INSUFFICIENT_BIOMECHANICS_EVIDENCE"]
+    assert _section(payload, "DIAGNOSIS")["status"] == "UNAVAILABLE"
+    assert _section(payload, "SCORECARD")["status"] == "UNAVAILABLE"
+    assert _section(payload, "COACH")["status"] == "UNAVAILABLE"
+
+
+def test_product_scorecard_is_built_directly_from_diagnosis(monkeypatch):
+    import slopecoach_ml.product.analyze_video as pipeline
+
+    real_builder = pipeline.build_scorecard
+    calls = []
+
+    def recording_builder(diagnosis_result):
+        calls.append(diagnosis_result)
+        return real_builder(diagnosis_result)
+
+    monkeypatch.setattr(pipeline, "build_scorecard", recording_builder)
+    payload = assemble_analyze_video_product(
+        video="synthetic.mp4",
+        sport_type=select_user_sport_type("SKI"),
+        biomechanics_report=_report(qualified=True),
+    )
+    assert len(calls) == 1
+    assert payload["product_report"]["status"] == "READY"
+    assert (
+        _section(payload, "SCORECARD")["payload"]
+        == _section(payload, "COACH")["payload"]["scorecard"]
+    )
+
+
 def test_product_report_sha_is_deterministic_and_input_is_not_mutated():
     report = _report(qualified=True)
     original = copy.deepcopy(report)
@@ -178,4 +244,8 @@ def test_product_report_sha_is_deterministic_and_input_is_not_mutated():
         == second["product_report"]["product_report_sha256"]
     )
     assert first["pipeline_provenance"]["models"] == report["models"]
+    assert (
+        first["pipeline_provenance"]["analysis_context_sha256"]
+        == second["pipeline_provenance"]["analysis_context_sha256"]
+    )
     json.dumps(first, sort_keys=True, allow_nan=False)
