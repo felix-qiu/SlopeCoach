@@ -8,14 +8,49 @@
 
 /* Begin PBXFileReference section */
 		A00000000000000000000005 /* SlopeCoach.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlopeCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000005 /* SlopeCoachTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SlopeCoachTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000005 /* SlopeCoachUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SlopeCoachUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A00000000000000000000004 /* SlopeCoach */ = {isa = PBXFileSystemSynchronizedRootGroup; path = SlopeCoach; sourceTree = "<group>"; };
+		B00000000000000000000004 /* SlopeCoachTests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = SlopeCoachTests; sourceTree = "<group>"; };
+		C00000000000000000000004 /* SlopeCoachUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = SlopeCoachUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		B00000000000000000000013 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000006;
+			remoteInfo = SlopeCoach;
+		};
+		C00000000000000000000013 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000006;
+			remoteInfo = SlopeCoach;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A00000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000007 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -29,6 +64,8 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000004 /* SlopeCoach */,
+				B00000000000000000000004 /* SlopeCoachTests */,
+				C00000000000000000000004 /* SlopeCoachUITests */,
 				A00000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -37,6 +74,8 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000005 /* SlopeCoach.app */,
+				B00000000000000000000005 /* SlopeCoachTests.xctest */,
+				C00000000000000000000005 /* SlopeCoachUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -66,6 +105,52 @@
 			productReference = A00000000000000000000005 /* SlopeCoach.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B00000000000000000000006 /* SlopeCoachTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0000000000000000000000D /* Build configuration list for PBXNativeTarget "SlopeCoachTests" */;
+			buildPhases = (
+				B00000000000000000000008 /* Sources */,
+				B00000000000000000000007 /* Frameworks */,
+				B00000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B00000000000000000000012 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B00000000000000000000004 /* SlopeCoachTests */,
+			);
+			name = SlopeCoachTests;
+			packageProductDependencies = (
+			);
+			productName = SlopeCoachTests;
+			productReference = B00000000000000000000005 /* SlopeCoachTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C00000000000000000000006 /* SlopeCoachUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0000000000000000000000D /* Build configuration list for PBXNativeTarget "SlopeCoachUITests" */;
+			buildPhases = (
+				C00000000000000000000008 /* Sources */,
+				C00000000000000000000007 /* Frameworks */,
+				C00000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C00000000000000000000012 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C00000000000000000000004 /* SlopeCoachUITests */,
+			);
+			name = SlopeCoachUITests;
+			packageProductDependencies = (
+			);
+			productName = SlopeCoachUITests;
+			productReference = C00000000000000000000005 /* SlopeCoachUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -78,6 +163,14 @@
 				TargetAttributes = {
 					A00000000000000000000006 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					B00000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A00000000000000000000006;
+					};
+					C00000000000000000000006 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A00000000000000000000006;
 					};
 				};
 			};
@@ -96,12 +189,28 @@
 			projectRoot = "";
 			targets = (
 				A00000000000000000000006 /* SlopeCoach */,
+				B00000000000000000000006 /* SlopeCoachTests */,
+				C00000000000000000000006 /* SlopeCoachUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A00000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000009 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -118,7 +227,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B00000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B00000000000000000000012 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000006 /* SlopeCoach */;
+			targetProxy = B00000000000000000000013 /* PBXContainerItemProxy */;
+		};
+		C00000000000000000000012 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000006 /* SlopeCoach */;
+			targetProxy = C00000000000000000000013 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A0000000000000000000000E /* Debug */ = {
@@ -277,6 +413,78 @@
 			};
 			name = Release;
 		};
+		B00000000000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chison.slopecoach.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SlopeCoach.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SlopeCoach";
+			};
+			name = Debug;
+		};
+		B00000000000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chison.slopecoach.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SlopeCoach.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SlopeCoach";
+			};
+			name = Release;
+		};
+		C00000000000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chison.slopecoach.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = SlopeCoach;
+			};
+			name = Debug;
+		};
+		C00000000000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chison.slopecoach.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = SlopeCoach;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -298,7 +506,26 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B0000000000000000000000D /* Build configuration list for PBXNativeTarget "SlopeCoachTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000010 /* Debug */,
+				B00000000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0000000000000000000000D /* Build configuration list for PBXNativeTarget "SlopeCoachUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000010 /* Debug */,
+				C00000000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;
 }
+

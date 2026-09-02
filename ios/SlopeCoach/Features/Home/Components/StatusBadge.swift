@@ -7,15 +7,15 @@ struct StatusBadge: View {
         HStack(spacing: 5) {
             Circle()
                 .fill(tint)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
 
             Text(title)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 9, weight: .bold))
                 .tracking(0.35)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
         .background(tint.opacity(0.11), in: Capsule())
     }
 

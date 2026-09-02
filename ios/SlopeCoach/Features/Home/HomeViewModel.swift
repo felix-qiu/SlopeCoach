@@ -1,5 +1,5 @@
-import Observation
 import Foundation
+import Observation
 
 enum AnalysisStatus: Equatable, Sendable {
     case ready(score: Int)
@@ -31,7 +31,7 @@ final class HomeViewModel {
             timestamp: "Yesterday, 3:18 PM",
             thumbnailName: "skiHero",
             status: .partial(reason: "More turns needed")
-        )
+        ),
     ]
 
     func startAnalysis(using router: AppRouter) {

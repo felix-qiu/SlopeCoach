@@ -8,7 +8,7 @@ struct HomeView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 header
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 16)
 
                 HeroCard()
                     .padding(.bottom, 16)
@@ -21,7 +21,7 @@ struct HomeView: View {
                 VStack(spacing: 14) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Recent Analyses")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(Color.slopeNavy)
 
                         Spacer()
@@ -37,7 +37,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 12)
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .background(Color.slopeBackground.ignoresSafeArea())
@@ -46,19 +46,14 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 11) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.slopePrimary)
-                    .frame(width: 42, height: 42)
-
-                Image(systemName: "mountain.2.fill")
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+        HStack(spacing: 10) {
+            Image("slopeCoachLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
 
             Text("SlopeCoach")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Color.slopeNavy)
 
             Spacer()
@@ -67,11 +62,11 @@ struct HomeView: View {
                 ZStack {
                     Circle()
                         .fill(Color.white)
-                        .frame(width: 42, height: 42)
+                        .frame(width: 40, height: 40)
                         .shadow(color: .black.opacity(0.07), radius: 8, y: 3)
 
                     Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 31))
+                        .font(.system(size: 29))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(Color.slopePrimary, Color.slopePrimary.opacity(0.14))
                 }
@@ -80,4 +75,5 @@ struct HomeView: View {
             .accessibilityLabel("Open profile")
         }
     }
+
 }

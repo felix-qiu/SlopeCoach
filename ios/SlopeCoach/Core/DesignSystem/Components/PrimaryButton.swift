@@ -3,6 +3,7 @@ import SwiftUI
 struct PrimaryButton: View {
     let title: String
     var systemImage: String? = nil
+    var isEnabled = true
     let action: () -> Void
 
     var body: some View {
@@ -14,15 +15,24 @@ struct PrimaryButton: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
             }
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.white)
-        .background(Color.slopePrimary, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .shadow(color: Color.slopePrimary.opacity(0.24), radius: 12, y: 6)
+        .disabled(!isEnabled)
+        .foregroundStyle(isEnabled ? Color.white : Color(.systemGray2))
+        .background(
+            isEnabled ? Color.slopePrimary : Color(.systemGray5),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .shadow(
+            color: isEnabled ? Color.slopePrimary.opacity(0.18) : .clear,
+            radius: 8,
+            y: 4
+        )
         .accessibilityIdentifier("primary-button-\(title)")
     }
 }
+

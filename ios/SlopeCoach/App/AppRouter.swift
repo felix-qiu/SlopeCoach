@@ -46,7 +46,9 @@ struct RootTabView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            BottomTabBar(selectedTab: $router.selectedTab)
+            if router.homePath.isEmpty {
+                BottomTabBar(selectedTab: $router.selectedTab)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: router.selectedTab)
     }
@@ -69,3 +71,4 @@ private struct PlaceholderTabView: View {
             .navigationTitle(title)
     }
 }
+

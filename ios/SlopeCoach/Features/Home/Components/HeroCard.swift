@@ -3,43 +3,50 @@ import SwiftUI
 struct HeroCard: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Image("skiHero")
-                .resizable()
-                .scaledToFill()
-                .frame(height: 218)
-                .frame(maxWidth: .infinity)
-                .clipped()
+            GeometryReader { proxy in
+                Image("skiHero")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(
+                        width: proxy.size.width,
+                        height: proxy.size.height,
+                        alignment: .trailing
+                    )
+                    .clipped()
+            }
 
             LinearGradient(
-                colors: [.clear, Color.slopeNavy.opacity(0.18), Color.slopeNavy.opacity(0.9)],
-                startPoint: .top,
+                colors: [Color.slopeNavy.opacity(0.76), Color.slopeNavy.opacity(0.2), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+
+            LinearGradient(
+                colors: [.clear, Color.slopeNavy.opacity(0.46)],
+                startPoint: .center,
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("PERSONAL COACHING", systemImage: "sparkles")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.86))
-
+            VStack(alignment: .leading, spacing: 7) {
                 Text("AI Ski Coach")
-                    .font(.system(size: 29, weight: .bold, design: .rounded))
+                    .font(.system(size: 27, weight: .bold))
 
                 Text("Improve your skiing with AI-powered\nvideo analysis")
-                    .font(.system(size: 15, weight: .medium))
-                    .lineSpacing(3)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(.system(size: 14, weight: .regular))
+                    .lineSpacing(2)
+                    .foregroundStyle(.white.opacity(0.92))
             }
             .foregroundStyle(.white)
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
         }
-        .frame(height: 218)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(height: 188)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 1)
         }
-        .shadow(color: Color.slopeNavy.opacity(0.16), radius: 16, y: 8)
+        .shadow(color: Color.slopeNavy.opacity(0.12), radius: 12, y: 6)
         .accessibilityElement(children: .combine)
     }
 }
